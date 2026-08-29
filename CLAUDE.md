@@ -15,33 +15,22 @@ Targets macOS (primary), Windows, Linux.
 
 ## Current state
 
-**Milestone 1 (Application Foundation): code complete, RUNTIME-UNVERIFIED.**
+**Milestone 1 (Application Foundation): ✅ done — runtime-verified and committed.**
 
-`npm run typecheck` and `npm run build` both pass. The app has **never been
-launched** — the Electron binary failed to download (see Blocker). Spec section 24
-requires run-and-verify before advancing, so Milestone 1 is not done.
+`typecheck`, `build`, `dev` and `smoke` all pass. The app runs: `npm run smoke`
+drives the real window over CDP and checks the whole preload → IPC → main chain,
+**7/7 passing**. Committed as `150d9cc` on `main`; working tree clean.
 
-Next: unblock Electron → `npm run dev` → verify → `git init` + commit → Milestone 2
-(Local File Browser).
+The old Electron-binary blocker is **resolved** — Electron 44.0.0 (x64) is
+installed and launching.
 
-## Blocker: Electron binary not installed
-
-Electron 44's postinstall `require()`s the now-ESM-only `@electron/get`.
-`require(esm)` needs **Node 22.12+**; the machine default is 22.4.0.
-**npm reports success and the binary is silently absent** — it only fails at launch
-with *"Electron failed to install correctly."*
-
-```bash
-nvm use          # v24.14.1, pinned in .nvmrc — ALWAYS do this before npm install
-npm install
-```
-
-A 114 MB partial download is preserved at `~/.cache/fly-setup/`. Full manual
-recovery steps are in `docs/STATUS.md`.
+Next: **Milestone 2 (Local File Browser)** — not started. Plan it before writing
+code, per the working agreement below. See `docs/STATUS.md` for the shape of it.
 
 ## Environment constraints — do not "fix" these
 
-1. **`nvm use` before `npm install`.** See Blocker.
+1. **`nvm use` before `npm install`.** Node 22.4.0 is the machine default and
+   silently fails to install Electron; `.nvmrc` pins v24.14.1.
 2. **Vite is pinned to 7.** `@vitejs/plugin-react` v6 requires Vite 8, but
    `electron-vite` v5 peers on Vite ≤ 7. Working set: `vite@^7.3.6` +
    `@vitejs/plugin-react@^5.0.4`. `npm update` will break the install with ERESOLVE.
@@ -50,6 +39,20 @@ recovery steps are in `docs/STATUS.md`.
 4. **This is a genuine Intel Mac** (i7-8559U), not Apple Silicon. The spec
    prioritises arm64 for release 1; an arm64 DMG can be cross-built here but
    **cannot be launched or tested locally**.
+
+## Electron gotcha: `ELECTRON_RUN_AS_NODE`
+
+Editors that are themselves Electron apps (Claude Code, VS Code) export
+`ELECTRON_RUN_AS_NODE=1` into the terminal. With it set, Electron **runs
+`main.js` as a plain Node script and never opens a window**, and
+`electron --version` prints the *bundled Node* version (`v24.18.1`) rather than
+`v44.0.0` — indistinguishable from a corrupt binary at a glance.
+
+`scripts/smoke-test.mjs` strips it from the child env. For a manual launch:
+
+```bash
+env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
+```
 
 ## macOS shell gotchas (these have already caused a false "all clean")
 
@@ -67,6 +70,7 @@ npm run dev        # Electron + Vite, hot reload
 npm run build      # typecheck, then build main/preload/renderer
 npm run typecheck  # both TS projects
 npm run smoke      # CDP end-to-end test: drives the real app, checks the IPC chain
+                   # exits 1 on any failed check — extend it as milestones land
 npm run build:mac  # package .dmg (arm64 + x64)
 ```
 
