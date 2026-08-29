@@ -1,0 +1,44 @@
+appId: com.titansoft.fly
+productName: Fly
+copyright: Copyright © 2026 titansoft
+
+directories:
+  buildResources: resources
+  output: release
+
+files:
+  - out/**
+  - package.json
+  - '!**/{.eslintrc,.prettierrc,.editorconfig}'
+  - '!**/{tsconfig*.json,electron.vite.config.ts}'
+  - '!{docs,src,release}/**'
+
+asarUnpack:
+  - resources/**
+
+mac:
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  # Hardened runtime is required for notarization later.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.dmg
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - AppImage
+  category: Utility
+  maintainer: titansoft
