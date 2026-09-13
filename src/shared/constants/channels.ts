@@ -33,5 +33,6 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC]
  * handler can never be registered on one by mistake.
  */
 export const IPC_EVENTS = {
-  SFTP_CONNECTION_CLOSED: 'sftp:connection-closed'
+  SFTP_CONNECTION_CLOSED: 'sftp:connection-closed',
+  MENU_COMMAND: 'app:menu-command'
 } as const

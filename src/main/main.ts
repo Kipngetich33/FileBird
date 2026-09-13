@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, type OpenDialogOptions } from 'electron'
 import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { IPC_EVENTS } from '../shared/constants/channels'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
+import { buildApplicationMenu } from './menu'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
 import { registerSftpIpc } from './ipc/sftp.ipc'
 import { registerSystemIpc } from './ipc/system.ipc'
@@ -84,6 +85,18 @@ void app.whenReady().then(() => {
   app.setAppUserModelId('com.titansoft.fly')
 
   applyContentSecurityPolicy()
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildApplicationMenu({
+        platform: process.platform,
+        isDev,
+        send: (command) => {
+          const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+          window?.webContents.send(IPC_EVENTS.MENU_COMMAND, { command })
+        }
+      })
+    )
+  )
   registerSystemIpc()
   registerLocalFilesIpc(appHome)
 

@@ -11,25 +11,27 @@ Targets macOS (primary), Windows, Linux.
 | `docs/STATUS.md` | **Session handoff.** Where work stopped, exact resume commands. |
 | `docs/README.md` | Milestone tracker + superseded decisions. |
 | `docs/MILESTONE-3-PLAN.md` | M3 plan: SSH library evaluation, host-key trust, error model, test server. |
-| `docs/MILESTONE-4-PLAN.md` | Latest milestone plan: keychain storage, private keys, Connection Manager, `~/.ssh/config` import. |
+| `docs/MILESTONE-4-PLAN.md` | M4 plan: keychain storage, private keys, Connection Manager, `~/.ssh/config` import. |
+| `docs/MILESTONE-5-PLAN.md` | Latest milestone plan: active pane, application menu, splitter, independence tests. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–4 ✅ done — runtime-verified and committed on `main`.**
+**Milestones 1–5 ✅ done — runtime-verified and committed on `main`.**
 
-Local files on the left. On the right, saved connections (§8): password or
-private-key login (optional passphrase), passwords/passphrases remembered in the
-OS keychain only after the server accepts them, import from `~/.ssh/config`, and
-"connect without saving". Host keys are trusted on first use; a changed key is
-refused. Verified by `npm test` (226 unit), `npm run test:integration` (real
-OpenSSH, real Keychain, real `ssh`) and `npm run smoke` (49 checks driving the
-real app, including a restart that proves secrets persist).
+Two independent panes (Local | Remote) with a resizable, remembered divider, an
+active pane (follows focus; Tab from a list switches), per-pane footers, and a
+real application menu (Refresh `Cmd+R`, Focus panes `Cmd+1/2`, Go Back `Cmd+[`,
+Parent `Cmd+↑`) that replaces Electron's default. Remote side: saved connections,
+password or key login, secrets in the OS keychain, `~/.ssh/config` import,
+host keys trusted on first use. Verified by `npm test` (263 unit),
+`npm run test:integration` (36: real OpenSSH, Keychain, `ssh`) and
+`npm run smoke` (70 checks driving the real app).
 
-Next: **Milestone 5 (Dual Pane Interface)** — not started. Plan it before
-writing code: resizable splitter, active-pane model, cross-pane keyboard,
-per-pane status (see MILESTONE-3-PLAN.md D5 for what M3 already did).
+Next: **Milestone 6 (Transfers)** — not started. Plan it before writing code:
+upload/download with progress over IPC (§11–12), SFTP streams (not rsync), and
+the deferred native-crypto throughput measurement (MILESTONE-3-PLAN.md D2).
 
 ## Environment constraints — do not "fix" these
 
@@ -115,6 +117,18 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 - **After `Page.reload` over CDP, wait for a fresh document** — a check can
   match the old page before the reload lands.
 
+## Testing gotchas added in M5
+
+- **CDP key events never trigger native menu accelerators** (verified: neither
+  Electron's default Reload nor a custom item fired). The smoke test launches the
+  app with `--inspect` and clicks menu items by id through the **main-process
+  Node inspector** (`Menu.getApplicationMenu().getMenuItemById('command:…').click()`).
+  The physical key → menu path stays a manual check.
+- **Electron's default menu** (used unless replaced) binds `Cmd+R` to Reload and
+  ships `Toggle Developer Tools` — `src/main/menu.ts` replaces it; keep the
+  `editMenu` role or copy/paste breaks in text fields on macOS.
+- **CDP `Tab` does perform real focus traversal**, so Tab behaviour is testable.
+
 ## Commands
 
 ```bash
@@ -123,7 +137,7 @@ npm run build             # typecheck, then build main/preload/renderer
 npm run typecheck         # both TS projects
 npm test                  # Vitest unit tests (src/**/*.test.ts)
 npm run test:integration  # against real OpenSSH in a container (needs Colima)
-npm run smoke             # CDP end-to-end test on the BUILT app (build first; needs Colima)
+npm run smoke             # CDP (+ main-process inspector) end-to-end test on the BUILT app (build first; needs Colima)
                           # exits 1 on any failed check — extend it as milestones land
                           # SMOKE_SCREENSHOT_DIR=<dir> also saves screenshots
 npm run test-server -- up # a local OpenSSH server for trying the app by hand (also: status, down)
@@ -139,7 +153,7 @@ Renderer (React, sandboxed)  ──contextBridge + IPC──>  Main (app logic, 
 
 ```
 src/
-├── main/       main.ts · security.ts · logger.ts · errors.ts
+├── main/       main.ts · menu.ts · security.ts · logger.ts · errors.ts
 │   ├── ipc/        validated handlers (one file per area)
 │   ├── services/   local-files · connection (live connections) · connection-profiles · ssh-config-import
 │   ├── sftp/       SftpProvider interface · ssh2 implementation · host-key trust store
@@ -213,6 +227,14 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   PKCS#8 conversion (the error gives the `ssh-keygen -p` fix), FIDO keys.
 - **Test server: Colima + OpenSSH container**, not Docker Desktop (GUI admin
   prompt, licence terms), not macOS Remote Login, not an in-process fake.
+- **Application menu replaces Electron's default** (M5): no Reload/DevTools in
+  packaged builds; menu commands travel as `IPC_EVENTS.MENU_COMMAND` and act on the
+  active pane. Accepted trade-off: `Cmd+↑` / `Cmd+[` belong to the menu app-wide.
+- **Panes stay independent without React Context** (§16 evaluated at M5): state is
+  lifted to `MainPage`, menu commands reach panes via `PaneHandle` refs. Revisit at
+  M7 (the transfer queue spans both panes).
+- **Divider position lives in renderer `localStorage`** (`fly.layout.v1`) until a
+  settings file exists.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer.

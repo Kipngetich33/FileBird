@@ -89,6 +89,20 @@ src/
 test/support/      OpenSSH container helper for tests
 ```
 
+## Using the panes
+
+Local files are on the left, the remote server on the right. One pane is active at
+a time (highlighted); menu commands act on it. Drag the divider to resize (or
+focus it and use ←/→; double-click resets) — the position is remembered.
+
+| Keys (macOS; Ctrl/Alt on Windows and Linux) | Action |
+|---|---|
+| `Tab` / `Shift+Tab` from a file list | Switch pane |
+| `Cmd+1` / `Cmd+2` | Focus Local / Remote |
+| `↑` `↓` · `Enter` · `Backspace` | Select · Open · Parent folder |
+| `Cmd+R` or `F5` | Refresh the active pane |
+| `Cmd+[` · `Cmd+↑` | Back · Parent folder (Go menu) |
+
 ## Security notes
 
 - **Host keys** are trusted on first use: Fly shows the fingerprint before

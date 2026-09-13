@@ -1,4 +1,4 @@
-import { useState, type JSX, type KeyboardEvent } from 'react'
+import { useState, type JSX, type KeyboardEvent, type Ref } from 'react'
 import type { ConnectionSummary } from '@shared/types/connections'
 import type { AppErrorPayload } from '@shared/types/errors'
 
@@ -15,6 +15,9 @@ interface ConnectionListProps {
   onNew: () => void
   onImport: () => void
   onDismissError: () => void
+  /** Tab / Shift+Tab from the list moves to the other pane. */
+  onSwitchPane: () => void
+  listRef?: Ref<HTMLDivElement>
 }
 
 const SMALL_BUTTON =
@@ -31,6 +34,13 @@ export function ConnectionList(props: ConnectionListProps): JSX.Element {
   const selected = profiles.find((profile) => profile.id === selectedId) ?? null
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Tab') {
+      if (event.target === event.currentTarget) {
+        event.preventDefault()
+        props.onSwitchPane()
+      }
+      return
+    }
     if (event.target instanceof HTMLButtonElement) return
     const index = profiles.findIndex((profile) => profile.id === selectedId)
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -85,6 +95,7 @@ export function ConnectionList(props: ConnectionListProps): JSX.Element {
         </p>
       ) : (
         <div
+          ref={props.listRef}
           role="listbox"
           aria-label="Saved connections"
           tabIndex={0}

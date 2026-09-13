@@ -1,13 +1,31 @@
-import { useCallback, useEffect, useRef, type JSX, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type JSX,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref
+} from 'react'
 import type { FileEntry } from '@shared/types/files'
 import type { DirectoryState } from '@renderer/hooks/useDirectory'
 import { PaneHeader } from './PaneHeader'
+import { PaneFooter } from './PaneFooter'
 import { FileTable } from './FileTable'
+import type { PaneHandle } from './pane'
 
 interface FilePaneProps {
   title: string
   subtitle?: string
   directory: DirectoryState
+  /** Whether this is the pane menu commands act on. */
+  active: boolean
+  /** Called whenever focus enters the pane. */
+  onActivate: () => void
+  /** Tab / Shift+Tab from the listing. */
+  onSwitchPane: () => void
+  ref?: Ref<PaneHandle>
   /** Extra header controls, e.g. Disconnect on the remote pane. */
   actions?: ReactNode
   /** A non-fatal message, such as a secret that couldn't be saved. */
@@ -16,18 +34,41 @@ interface FilePaneProps {
 }
 
 /**
- * One file browser pane: toolbar, path, and listing.
+ * One file browser pane: toolbar, path, listing and its own status footer.
  *
  * Keyboard (spec section 14): ↑/↓ select, Enter opens, Backspace goes to the
- * parent folder, F5 refreshes. Delete and F2 arrive with file operations (M8).
+ * parent folder, F5 refreshes, Tab switches to the other pane. Delete and F2
+ * arrive with file operations (M8).
  */
-export function FilePane({ title, subtitle, directory, actions, notice, onDismissNotice }: FilePaneProps): JSX.Element {
+export function FilePane({
+  title,
+  subtitle,
+  directory,
+  active,
+  onActivate,
+  onSwitchPane,
+  ref,
+  actions,
+  notice,
+  onDismissNotice
+}: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, loading, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, dismissError } = directory
   const paneRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => paneRef.current?.focus(), [])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => paneRef.current?.focus(),
+      refresh: () => void refresh(),
+      goBack: () => void goBack(),
+      goUp: () => void goUp()
+    }),
+    [refresh, goBack, goUp]
+  )
 
   // Keep the selected row in view as the keyboard moves it.
   useEffect(() => {
@@ -45,6 +86,16 @@ export function FilePane({ title, subtitle, directory, actions, notice, onDismis
   )
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    // Tab from the listing itself switches panes; from toolbar buttons it stays
+    // ordinary tabbing, so every control remains reachable by keyboard.
+    if (event.key === 'Tab') {
+      if (event.target === paneRef.current) {
+        event.preventDefault()
+        onSwitchPane()
+      }
+      return
+    }
+
     // Let focused toolbar buttons handle their own activation keys.
     if (event.target instanceof HTMLButtonElement && (event.key === 'Enter' || event.key === ' ')) {
       return
@@ -83,17 +134,24 @@ export function FilePane({ title, subtitle, directory, actions, notice, onDismis
     }
   }
 
+  const selected = entries.find((entry) => entry.path === selectedPath) ?? null
+
   return (
     <section
       ref={paneRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onFocus={onActivate}
       aria-label={`${title} files`}
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-[#11141b] outline-none focus-within:border-white/[0.14]"
+      data-active={active}
+      className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[#11141b] outline-none transition-colors ${
+        active ? 'border-sky-500/35' : 'border-white/[0.07]'
+      }`}
     >
       <PaneHeader
         title={title}
         subtitle={subtitle}
+        active={active}
         actions={actions}
         path={listing?.path ?? null}
         loading={loading}
@@ -139,6 +197,7 @@ export function FilePane({ title, subtitle, directory, actions, notice, onDismis
           <FileTable
             entries={entries}
             selectedPath={selectedPath}
+            active={active}
             onSelect={select}
             onOpen={openEntry}
           />
@@ -147,6 +206,8 @@ export function FilePane({ title, subtitle, directory, actions, notice, onDismis
           <p className="px-3 py-6 text-center text-[12px] text-zinc-600">This folder is empty.</p>
         )}
       </div>
+
+      <PaneFooter count={listing === null ? null : entries.length} selected={selected} />
     </section>
   )
 }

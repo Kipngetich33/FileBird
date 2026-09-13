@@ -14,11 +14,13 @@ const COLUMNS =
 interface FileTableProps {
   entries: FileEntry[]
   selectedPath: string | null
+  /** An inactive pane shows its selection muted, so only one pane looks "live". */
+  active: boolean
   onSelect: (path: string) => void
   onOpen: (entry: FileEntry) => void
 }
 
-export function FileTable({ entries, selectedPath, onSelect, onOpen }: FileTableProps): JSX.Element {
+export function FileTable({ entries, selectedPath, active, onSelect, onOpen }: FileTableProps): JSX.Element {
   return (
     <div role="grid" aria-label="Files" className="@container min-w-0">
       <div
@@ -40,6 +42,7 @@ export function FileTable({ entries, selectedPath, onSelect, onOpen }: FileTable
           key={entry.path}
           entry={entry}
           selected={entry.path === selectedPath}
+          active={active}
           onSelect={onSelect}
           onOpen={onOpen}
         />
@@ -51,12 +54,13 @@ export function FileTable({ entries, selectedPath, onSelect, onOpen }: FileTable
 interface FileRowProps {
   entry: FileEntry
   selected: boolean
+  active: boolean
   onSelect: (path: string) => void
   onOpen: (entry: FileEntry) => void
 }
 
 // Memoised: moving the selection re-renders two rows, not the whole folder.
-const FileRow = memo(function FileRow({ entry, selected, onSelect, onOpen }: FileRowProps): JSX.Element {
+const FileRow = memo(function FileRow({ entry, selected, active, onSelect, onOpen }: FileRowProps): JSX.Element {
   return (
     <div
       role="row"
@@ -66,7 +70,11 @@ const FileRow = memo(function FileRow({ entry, selected, onSelect, onOpen }: Fil
       onClick={() => onSelect(entry.path)}
       onDoubleClick={() => onOpen(entry)}
       className={`${COLUMNS} h-7 cursor-default text-[12px] ${
-        selected ? 'bg-sky-500/20 text-zinc-50' : 'text-zinc-300 hover:bg-white/[0.03]'
+        selected
+          ? active
+            ? 'bg-sky-500/20 text-zinc-50'
+            : 'bg-white/[0.08] text-zinc-200'
+          : 'text-zinc-300 hover:bg-white/[0.03]'
       } ${entry.isHidden ? 'opacity-55' : ''}`}
     >
       <span role="gridcell" className="flex min-w-0 items-center gap-2">

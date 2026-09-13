@@ -19,6 +19,8 @@ import { TEST_PASSPHRASE, generateTestKeys, sshKeygenFingerprint } from '../test
 
 const run = promisify(execFile)
 const PORT = 9222
+/** Node inspector for the main process, used to click real application menu items. */
+const INSPECT_PORT = 9339
 const SHOT_DIR = process.env.SMOKE_SCREENSHOT_DIR
 const KEYCHAIN_SERVICE = 'Fly (development)'
 const ELECTRON = './node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
@@ -81,7 +83,7 @@ async function launchApp() {
   // Electron honours ELECTRON_RUN_AS_NODE from the parent environment: if it is
   // set the binary runs main.js as a plain Node script and never opens a window.
   const { ELECTRON_RUN_AS_NODE, ELECTRON_NO_ATTACH_CONSOLE, ...inherited } = process.env
-  const child = spawn('./node_modules/.bin/electron', ['.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
+  const child = spawn('./node_modules/.bin/electron', [`--inspect=${INSPECT_PORT}`, '.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     // FLY_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
@@ -120,6 +122,34 @@ async function launchApp() {
     })
   await send('Runtime.enable')
 
+  // The main process, through its Node inspector: CDP key events never reach
+  // native menu accelerators, but menu items can be clicked from here.
+  let mainTarget
+  for (let i = 0; i < 40 && !mainTarget; i++) {
+    try {
+      mainTarget = (await (await fetch(`http://127.0.0.1:${INSPECT_PORT}/json/list`)).json())[0]
+    } catch {}
+    if (!mainTarget) await sleep(250)
+  }
+  if (!mainTarget) throw new Error('Main-process inspector did not appear')
+  const mainWs = new WebSocket(mainTarget.webSocketDebuggerUrl)
+  await new Promise((r) => mainWs.addEventListener('open', r))
+  let mainId = 0
+  const mainPending = new Map()
+  mainWs.addEventListener('message', (ev) => {
+    const msg = JSON.parse(ev.data)
+    if (msg.id && mainPending.has(msg.id)) {
+      mainPending.get(msg.id)(msg)
+      mainPending.delete(msg.id)
+    }
+  })
+  const mainEval = (expression) =>
+    new Promise((resolve) => {
+      const n = ++mainId
+      mainPending.set(n, (msg) => resolve(msg.result?.result?.value))
+      mainWs.send(JSON.stringify({ id: n, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }))
+    })
+
   const js = async (expression) => {
     const res = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
     const details = res.result?.exceptionDetails
@@ -130,6 +160,26 @@ async function launchApp() {
   const self = {
     send,
     js,
+    mainEval,
+    /** Clicks an application menu item by id, exactly as choosing it from the menu bar would. */
+    async clickMenu(id) {
+      const result = await mainEval(`(() => { const item = process.mainModule.require('electron').Menu.getApplicationMenu().getMenuItemById(${q(id)}); if (!item) return 'missing'; item.click(); return 'clicked' })()`)
+      if (result !== 'clicked') throw new Error(`menu item ${id}: ${result}`)
+      await sleep(150)
+    },
+    async mouseDrag(fromX, y, toX) {
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fromX, y, button: 'left', buttons: 1, clickCount: 1 })
+      for (const step of [0.25, 0.5, 0.75, 1]) {
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: fromX + (toX - fromX) * step, y, button: 'left', buttons: 1 })
+      }
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: toX, y, button: 'left', buttons: 0, clickCount: 1 })
+    },
+    async mouseClick(x, y, clickCount = 1) {
+      for (let c = 1; c <= clickCount; c++) {
+        await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: c })
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: c })
+      }
+    },
     async evaluate(label, expression, check) {
       let value
       let pass = false
@@ -159,9 +209,9 @@ async function launchApp() {
         await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount })
       }
     },
-    async press(key, code, keyCode) {
-      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, windowsVirtualKeyCode: keyCode })
-      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode })
+    async press(key, code, keyCode, modifiers = 0) {
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers })
     },
     /** Real typing, replacing what the field holds. */
     async type(selector, text) {
@@ -183,6 +233,7 @@ async function launchApp() {
     },
     async close() {
       ws.close()
+      mainWs.close()
       child.kill('SIGTERM')
       await Promise.race([exited, sleep(5000)])
     }
@@ -198,6 +249,12 @@ const rowNames = (scope) =>
 const alertIn = (scope) => `(document.querySelector(${q(`${scope} [role="alert"]`)})?.textContent ?? '')`
 const textOf = (selector) => `(document.querySelector(${q(selector)})?.textContent ?? '')`
 const exists = (selector) => `!!document.querySelector(${q(selector)})`
+const SEPARATOR = '[role="separator"][aria-label="Resize panes"]'
+const LOCAL_PANE_ACTIVE = `document.querySelector(${q(LOCAL)})?.dataset.active === 'true'`
+const box = (selector) => `(() => { const r = document.querySelector(${q(selector)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height } })()`
+const splitValue = `Number(document.querySelector(${q(SEPARATOR)})?.getAttribute('aria-valuenow'))`
+const leftSlotWidth = `document.querySelector(${q(SEPARATOR)}).previousElementSibling.getBoundingClientRect().width`
+const insidePane = (scope) => `!!document.activeElement?.closest(${q(scope)})`
 const profileRow = (name) => `[data-connection-name=${q(name)}]`
 const codeFrom = (call) =>
   `(async () => { try { await ${call}; return 'NOT REJECTED' } catch (e) {
@@ -254,6 +311,7 @@ try {
     (v) =>
       v ===
       JSON.stringify({
+        app: ['onMenuCommand'],
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
         keys: ['inspect', 'pick'],
         local: ['getHomeDirectory', 'listDirectory'],
@@ -318,6 +376,96 @@ try {
   await app.doubleClick(rowFor(join(fixture, 'locked')))
   await app.waitFor(`${alertIn(LOCAL)} !== ''`)
   await app.evaluate('UI local: unreadable folder shows a friendly error', alertIn(LOCAL), (v) => /permission/i.test(v) && !/Error invoking|{/.test(v))
+
+  // ------------------------------------------------ M5: application menu ---
+
+  const menu = JSON.parse(
+    await app.mainEval(`JSON.stringify((() => {
+      const walk = (items, parent) => items.flatMap((i) => [{ parent, label: i.label, role: (i.role ?? '').toLowerCase(), id: i.id ?? null, accelerator: i.accelerator ?? null }, ...(i.submenu ? walk(i.submenu.items, i.label) : [])])
+      return walk(process.mainModule.require('electron').Menu.getApplicationMenu().items, '')
+    })())`)
+  )
+  const byId = Object.fromEntries(menu.filter((i) => i.id).map((i) => [i.id, i]))
+  record(
+    'menu: the default Reload is gone; Refresh is CmdOrCtrl+R; reload and DevTools only under Developer',
+    { refresh: byId['command:refresh'], developer: menu.filter((i) => i.parent === 'Developer').map((i) => i.role) },
+    !menu.some((i) => i.role === 'reload') &&
+      byId['command:refresh']?.accelerator === 'CmdOrCtrl+R' && byId['command:refresh']?.parent === 'View' &&
+      menu.filter((i) => ['forcereload', 'toggledevtools'].includes(i.role)).every((i) => i.parent === 'Developer') &&
+      menu.some((i) => i.role === 'editmenu')
+  )
+
+  // ------------------------------------------------------ M5: splitter ---
+
+  const separatorBox = await app.js(box(SEPARATOR))
+  const sepX = separatorBox.x + separatorBox.w / 2
+  const sepY = separatorBox.y + separatorBox.h / 2
+  record('splitter: starts at 50/50', await app.js(splitValue), (await app.js(splitValue)) === 50)
+
+  const widthBefore = await app.js(leftSlotWidth)
+  await app.mouseDrag(sepX, sepY, sepX + 150)
+  const widthAfter = await app.js(leftSlotWidth)
+  record('splitter: dragging with the mouse widens the local pane by the drag distance', { widthBefore, widthAfter }, Math.abs(widthAfter - widthBefore - 150) <= 4)
+
+  const dragged = await app.js(box(SEPARATOR))
+  await app.mouseDrag(dragged.x + dragged.w / 2, sepY, 5)
+  const narrowest = await app.js(leftSlotWidth)
+  record('splitter: a pane cannot be dragged narrower than 320px', narrowest, narrowest >= 319.5 && narrowest <= 330)
+
+  const resetBox = await app.js(box(SEPARATOR))
+  await app.mouseClick(resetBox.x + resetBox.w / 2, sepY, 2)
+  const afterReset = await app.js(splitValue)
+  await app.js(`document.querySelector(${q(SEPARATOR)}).focus()`)
+  for (let i = 0; i < 5; i++) await app.press('ArrowRight', 'ArrowRight', 39)
+  const expectedSplit = await app.js(splitValue)
+  record('splitter: double-click resets to 50, and → moves it in 2% steps', { afterReset, expectedSplit }, afterReset === 50 && expectedSplit === 60)
+
+  // ------------------------------------------------- M5: active pane ---
+
+  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  record('active pane: the local pane is active once focused', await app.js(textOf('[data-testid="status-active-pane"]')), (await app.js(LOCAL_PANE_ACTIVE)) && (await app.js(`document.querySelector(${q(PANE)})?.dataset.active === 'false'`)))
+
+  const remoteBox = await app.js(box(PANE))
+  await app.mouseClick(remoteBox.x + 60, remoteBox.y + 20)
+  record(
+    'active pane: clicking the remote pane makes it active and the local pane inactive',
+    await app.js(textOf('[data-testid="status-active-pane"]')),
+    (await app.waitFor(`document.querySelector(${q(PANE)})?.dataset.active === 'true'`)) && !(await app.js(LOCAL_PANE_ACTIVE)) &&
+      (await app.js(textOf('[data-testid="status-active-pane"]'))) === 'Remote'
+  )
+
+  await app.clickMenu('command:focus-local')
+  record('menu: View › Focus Local Pane focuses and activates the local pane', '', (await app.waitFor(LOCAL_PANE_ACTIVE)) && (await app.js(insidePane(LOCAL))))
+  await app.clickMenu('command:focus-remote')
+  record('menu: View › Focus Remote Pane focuses and activates the remote pane', '', (await app.waitFor(`document.querySelector(${q(PANE)})?.dataset.active === 'true'`)) && (await app.js(insidePane(PANE))))
+
+  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.press('Tab', 'Tab', 9)
+  const tabbedToRemote = (await app.waitFor(insidePane(PANE))) && (await app.js(`document.querySelector(${q(PANE)})?.dataset.active === 'true'`))
+  await app.press('Tab', 'Tab', 9, 8)
+  const shiftTabbedBack = (await app.waitFor(`document.activeElement === document.querySelector(${q(LOCAL)})`)) && (await app.js(LOCAL_PANE_ACTIVE))
+  record('keyboard: Tab from the local list moves to the remote pane, Shift+Tab comes back', { tabbedToRemote, shiftTabbedBack }, tabbedToRemote && shiftTabbedBack)
+
+  await app.js(`window.__refreshButton = document.querySelector(${q(`${LOCAL} button[aria-label="Refresh"]`)}); window.__refreshButton.focus()`)
+  await app.press('Tab', 'Tab', 9)
+  await sleep(150)
+  record(
+    'keyboard: Tab from a toolbar button moves to the next control, not to the other pane',
+    await app.js(`document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent?.trim() ?? document.activeElement?.tagName`),
+    (await app.js(`document.activeElement !== window.__refreshButton && document.activeElement !== document.body`)) && !(await app.js(insidePane(PANE)))
+  )
+
+  // ------------------------------------------------------ M5: footers ---
+
+  await app.js(`document.querySelector(${q(rowFor(join(fixture, 'file2.txt')))}).click()`)
+  await app.evaluate(
+    'footer: the local pane shows its item count and the selected file',
+    `JSON.stringify({ count: ${textOf(`${LOCAL} [data-testid="pane-count"]`)}, selection: ${textOf(`${LOCAL} [data-testid="pane-selection"]`)} })`,
+    (v) => {
+      const d = JSON.parse(v)
+      return d.count === `${EXPECTED_LOCAL.length + 1} items` && d.selection === 'file2.txt · 5 bytes'
+    }
+  )
 
   // ------------------------------------------ saved key connection, first time ---
 
@@ -410,8 +558,94 @@ try {
     if (!reconnected) await sleep(100)
   }
   record('restart: the saved connection connects with no passphrase or host key prompt', { reconnected, sawPrompt }, reconnected && !sawPrompt)
+  record('splitter: the position is remembered across a restart', await app.js(splitValue), (await app.js(splitValue)) === expectedSplit)
+
+  // ------------------------------------------- M5: menu commands, active pane only ---
+
+  await app.js(`window.__smokeMarker = 'still here'`)
+  await writeFile(join(fixture, 'menu-refresh-local.txt'), '')
+  await server.exec(': > /config/menu-refresh-remote.txt && chown 1000:1000 /config/menu-refresh-remote.txt')
+  record('active pane: connecting makes the remote pane active', await app.js(textOf('[data-testid="status-active-pane"]')), await app.waitFor(`document.querySelector(${q(REMOTE)})?.dataset.active === 'true'`))
+
+  await app.clickMenu('command:refresh')
+  const remoteRefreshed = await app.waitFor(exists(rowFor('/config/menu-refresh-remote.txt')))
+  await sleep(800)
+  const localUntouched = !(await app.js(exists(rowFor(join(fixture, 'menu-refresh-local.txt')))))
+  record('menu: View › Refresh refreshes only the active (remote) pane', { remoteRefreshed, localUntouched }, remoteRefreshed && localUntouched)
+
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
+  const localRefreshed = await app.waitFor(exists(rowFor(join(fixture, 'menu-refresh-local.txt'))))
+  record('menu: after Focus Local, Refresh refreshes the local pane', '', localRefreshed)
+  record('menu: no menu command reloaded the window', await app.js('window.__smokeMarker ?? null'), (await app.js('window.__smokeMarker ?? null')) === 'still here')
+
+  const localPathBefore = await app.js(pathOf(LOCAL))
+  await app.doubleClick(rowFor('/config/fixture'))
+  await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture'`)
+  await app.clickMenu('command:go-up')
+  const remoteUp = await app.waitFor(`${pathOf(REMOTE)} === '/config'`)
+  await app.clickMenu('command:go-back')
+  const remoteBack = await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture'`)
+  record(
+    'menu: Go › Parent Folder and Go › Back act on the active pane only',
+    { remoteUp, remoteBack, local: await app.js(pathOf(LOCAL)) },
+    remoteUp && remoteBack && (await app.js(pathOf(LOCAL))) === localPathBefore
+  )
+
+  // ------------------------------------------------- M5: footers per pane ---
+
+  await app.waitFor(exists(rowFor('/config/fixture/file2.txt')))
+  await app.js(`document.querySelector(${q(rowFor('/config/fixture/file2.txt'))}).click()`)
+  await app.js(`document.querySelector(${q(rowFor(join(fixture, 'alpha')))}).click()`)
+  await app.evaluate(
+    'footer: each pane shows its own count and selection',
+    `JSON.stringify({ local: ${textOf(`${LOCAL} [data-testid="pane-selection"]`)}, remote: ${textOf(`${REMOTE} [data-testid="pane-selection"]`)}, remoteCount: ${textOf(`${REMOTE} [data-testid="pane-count"]`)} })`,
+    (v) => {
+      const d = JSON.parse(v)
+      return d.local === 'alpha · Folder' && d.remote === 'file2.txt · 5 bytes' && d.remoteCount === `${EXPECTED_REMOTE.length} items`
+    }
+  )
+
+  if (SHOT_DIR) {
+    await app.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 640, deviceScaleFactor: 0, mobile: false })
+    await sleep(400)
+    await app.screenshot('5-both-panes-min-width')
+    await app.send('Emulation.clearDeviceMetricsOverride')
+    await sleep(200)
+  }
+
+  // ---------------------------------- M5: a frozen remote never blocks the local pane ---
+
+  const localStart = await app.js(pathOf(LOCAL))
+  await server.pause()
+  let independence
+  try {
+    await app.doubleClick(rowFor('/config/fixture/alpha'))
+    const remoteLoading = await app.waitFor(`${textOf(`${REMOTE} [data-testid="pane-path"]`)} === '/config/fixture' && ${textOf(REMOTE)}.includes('Loading')`)
+    await app.doubleClick(rowFor(join(fixture, 'alpha')))
+    const localOpened = await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`)
+    await app.js(`document.querySelector(${q(`${LOCAL} button[aria-label="Back"]`)}).click()`)
+    const localBack = await app.waitFor(`${pathOf(LOCAL)} === ${q(localStart)}`)
+    await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+    await app.press('F5', 'F5', 116)
+    const stillLoading = await app.js(`${textOf(REMOTE)}.includes('Loading') && ${pathOf(REMOTE)} === '/config/fixture'`)
+    independence = { remoteLoading, localOpened, localBack, stillLoading }
+  } finally {
+    await server.unpause()
+  }
+  const remoteCaughtUp = await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture/alpha'`, 15000)
+  record(
+    'independence: while the server is frozen mid-listing, the local pane still opens, goes back and refreshes',
+    { ...independence, remoteCaughtUp },
+    independence.remoteLoading && independence.localOpened && independence.localBack && independence.stillLoading && remoteCaughtUp
+  )
+
+  await app.js(`document.querySelector(${q(rowFor(join(fixture, 'file2.txt')))}).click()`)
+  const localBeforeDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [aria-selected="true"]`)})?.dataset.path })`)
   await app.click(REMOTE, 'Disconnect')
   await app.waitFor(exists(profileRow('Smoke key')))
+  const localAfterDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [aria-selected="true"]`)})?.dataset.path })`)
+  record('independence: disconnecting leaves the local path and selection untouched', localAfterDisconnect, localAfterDisconnect === localBeforeDisconnect)
 
   // ----------------------------------------------------- password, not remembered ---
 

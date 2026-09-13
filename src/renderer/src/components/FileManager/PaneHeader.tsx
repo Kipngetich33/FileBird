@@ -4,6 +4,7 @@ interface PaneHeaderProps {
   title: string
   /** e.g. the user@host of a remote pane. */
   subtitle?: string
+  active: boolean
   path: string | null
   loading: boolean
   canGoBack: boolean
@@ -18,6 +19,7 @@ interface PaneHeaderProps {
 export function PaneHeader({
   title,
   subtitle,
+  active,
   path,
   loading,
   canGoBack,
@@ -28,11 +30,16 @@ export function PaneHeader({
   actions
 }: PaneHeaderProps): JSX.Element {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-3 border-b border-white/[0.06] px-3">
-      <span className="flex shrink-0 items-baseline gap-2">
-        <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">{title}</span>
+    // A container, so a narrow pane can drop the user@host label (also shown in the title and status bars).
+    <div className="@container flex h-10 shrink-0 items-center gap-3 border-b border-white/[0.06] px-3">
+      <span className="flex min-w-0 shrink-0 items-baseline gap-2">
+        <span
+          className={`text-[10px] font-semibold tracking-wider uppercase transition-colors ${active ? 'text-sky-300' : 'text-zinc-500'}`}
+        >
+          {title}
+        </span>
         {subtitle !== undefined && (
-          <span data-testid="pane-subtitle" className="max-w-40 truncate text-[11px] text-zinc-400">
+          <span data-testid="pane-subtitle" title={subtitle} className="hidden max-w-32 truncate text-[11px] text-zinc-400 @md:inline-block">
             {subtitle}
           </span>
         )}
@@ -50,12 +57,14 @@ export function PaneHeader({
         </ToolbarButton>
       </div>
 
+      {/* Truncates at the start, so the current folder's name stays visible: …/fixture/alpha */}
       <span
         data-testid="pane-path"
         title={path ?? undefined}
-        className="min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-300 select-text"
+        dir="rtl"
+        className="min-w-16 flex-1 truncate text-left font-mono text-[11px] text-zinc-300 select-text"
       >
-        {path ?? ''}
+        <bdi dir="ltr">{path ?? ''}</bdi>
       </span>
 
       {loading && <span className="shrink-0 text-[11px] text-zinc-500">Loading…</span>}

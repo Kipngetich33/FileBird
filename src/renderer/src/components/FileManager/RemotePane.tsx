@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type JSX, type Ref } from 'react'
 import type { ConnectionInfo } from '@shared/types/connection'
 import type { ConnectionInput, ConnectionSummary } from '@shared/types/connections'
 import type { AppErrorPayload } from '@shared/types/errors'
@@ -15,6 +15,7 @@ import type { RemoteConnectionState } from '@renderer/hooks/useRemoteConnection'
 import { connectionsService } from '@renderer/services/connections.service'
 import { sftpService } from '@renderer/services/sftp.service'
 import { FilePane } from './FilePane'
+import type { PaneHandle } from './pane'
 
 type View = { name: 'list' } | { name: 'new' } | { name: 'edit'; profile: ConnectionSummary }
 
@@ -26,9 +27,20 @@ const toInput = (profile: ConnectionSummary): ConnectionInput => ({
   auth: profile.auth
 })
 
+interface RemotePaneProps {
+  remote: RemoteConnectionState
+  active: boolean
+  onActivate: () => void
+  onSwitchPane: () => void
+  ref?: Ref<PaneHandle>
+}
+
 /** The right-hand pane: saved connections until connected, then the remote file browser. */
-export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.Element {
+export function RemotePane({ remote, active, onActivate, onSwitchPane, ref }: RemotePaneProps): JSX.Element {
   const saved = useConnectionProfiles()
+  const connectedPaneRef = useRef<PaneHandle>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<View>({ name: 'list' })
   const [importing, setImporting] = useState(false)
   const [deleting, setDeleting] = useState<ConnectionSummary | null>(null)
@@ -43,6 +55,19 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
   }, [reload, connectionId])
 
   const busy = remote.phase === 'connecting'
+  const connected = remote.connection !== null
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => (connected ? connectedPaneRef.current?.focus() : (listRef.current ?? sectionRef.current)?.focus()),
+      // Disconnected, Refresh reloads the saved connections instead.
+      refresh: () => (connected ? connectedPaneRef.current?.refresh() : void reload()),
+      goBack: () => connectedPaneRef.current?.goBack(),
+      goUp: () => connectedPaneRef.current?.goUp()
+    }),
+    [connected, reload]
+  )
 
   async function save(input: ConnectionInput, then: 'list' | 'connect'): Promise<void> {
     setFormError(null)
@@ -87,6 +112,10 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
         // Keyed by connection, so a new connection starts with fresh browsing state.
         <ConnectedPane
           key={remote.connection.id}
+          paneRef={connectedPaneRef}
+          active={active}
+          onActivate={onActivate}
+          onSwitchPane={onSwitchPane}
           connection={remote.connection}
           onDisconnect={remote.disconnect}
           notice={remote.notice}
@@ -94,11 +123,25 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
         />
       ) : (
         <section
+          ref={sectionRef}
+          tabIndex={-1}
           aria-label="Remote connection"
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-[#11141b]"
+          data-active={active}
+          onFocus={onActivate}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab' && event.target === event.currentTarget) {
+              event.preventDefault()
+              onSwitchPane()
+            }
+          }}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[#11141b] outline-none transition-colors ${
+            active ? 'border-sky-500/35' : 'border-white/[0.07]'
+          }`}
         >
           <div className="flex h-10 shrink-0 items-center border-b border-white/[0.06] px-3">
-            <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">Remote</span>
+            <span className={`text-[10px] font-semibold tracking-wider uppercase transition-colors ${active ? 'text-sky-300' : 'text-zinc-500'}`}>
+              Remote
+            </span>
           </div>
           <div className="flex min-h-0 flex-1 overflow-y-auto p-6">
             <div className="m-auto w-full">
@@ -124,6 +167,8 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
                     setView({ name: 'new' })
                   }}
                   onImport={() => setImporting(true)}
+                  onSwitchPane={onSwitchPane}
+                  listRef={listRef}
                   onDismissError={() => {
                     remote.dismissError()
                     setFormError(null)
@@ -208,13 +253,17 @@ function useRequestKey(request: object | null): number {
 }
 
 interface ConnectedPaneProps {
+  paneRef: Ref<PaneHandle>
+  active: boolean
+  onActivate: () => void
+  onSwitchPane: () => void
   connection: ConnectionInfo
   onDisconnect: () => Promise<void>
   notice: string | null
   onDismissNotice: () => void
 }
 
-function ConnectedPane({ connection, onDisconnect, notice, onDismissNotice }: ConnectedPaneProps): JSX.Element {
+function ConnectedPane({ paneRef, active, onActivate, onSwitchPane, connection, onDisconnect, notice, onDismissNotice }: ConnectedPaneProps): JSX.Element {
   const source = useMemo<DirectorySource>(
     () => ({
       getStartDirectory: () => Promise.resolve(connection.homePath),
@@ -227,6 +276,10 @@ function ConnectedPane({ connection, onDisconnect, notice, onDismissNotice }: Co
 
   return (
     <FilePane
+      ref={paneRef}
+      active={active}
+      onActivate={onActivate}
+      onSwitchPane={onSwitchPane}
       title="Remote"
       subtitle={`${connection.username}@${where}`}
       directory={directory}

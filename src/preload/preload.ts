@@ -9,6 +9,7 @@ import type {
   SecretEntry
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
+import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
 import type { SystemVersions } from '../shared/types/system'
 
 /**
@@ -19,6 +20,18 @@ import type { SystemVersions } from '../shared/types/system'
  * only call the methods defined below (spec section 20).
  */
 const api = {
+  app: {
+    /** Application menu commands. Returns an unsubscribe function; unknown commands are dropped here. */
+    onMenuCommand: (listener: (command: MenuCommand) => void): (() => void) => {
+      const forward = (_event: IpcRendererEvent, payload: { command?: unknown } | null): void => {
+        if (isMenuCommand(payload?.command)) listener(payload.command)
+      }
+      ipcRenderer.on(IPC_EVENTS.MENU_COMMAND, forward)
+      return () => {
+        ipcRenderer.removeListener(IPC_EVENTS.MENU_COMMAND, forward)
+      }
+    }
+  },
   system: {
     getVersion: (): Promise<SystemVersions> => ipcRenderer.invoke(IPC.SYSTEM_GET_VERSION)
   },
