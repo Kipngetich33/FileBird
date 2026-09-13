@@ -13,13 +13,21 @@ operating system warns the first time you open Fly.
 
 ### macOS
 
-1. Open `Fly-<version>-mac-arm64.dmg` (Apple Silicon) or `Fly-<version>-mac-x64.dmg`
-   (Intel) and drag **Fly** to **Applications**.
-2. The first time, **right-click Fly in Applications → Open → Open**. macOS
-   blocks a double-click on an app from an unidentified developer. (If macOS says
-   the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/Fly.app`
-   once — the builds are ad-hoc signed only.)
-3. Saved passwords and passphrases go to your login Keychain, under **Fly**.
+Fly needs macOS 13 (Ventura) or later. `Fly-<version>-mac-universal.dmg` runs on
+both Apple Silicon and Intel; the `-arm64` / `-x64` DMGs are smaller single-CPU
+builds.
+
+1. Open the DMG and drag **Fly** to **Applications**. The DMG window also
+   contains **How to install Fly.txt** with these steps.
+2. Double-click Fly. The first time, macOS says it could not verify Fly: click
+   **Done**.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, click
+   **Open Anyway** next to Fly, and confirm. This is needed only once.
+   On macOS 14 or earlier, right-click Fly → **Open** → **Open** does the same.
+4. If macOS says the app "is damaged", run
+   `xattr -dr com.apple.quarantine /Applications/Fly.app` once. The builds are
+   ad-hoc signed only, not notarised.
+5. Saved passwords and passphrases go to your login Keychain, under **Fly**.
 
 ### Windows
 
@@ -84,6 +92,7 @@ colima start fly --vm-type vz --cpu 2 --memory 2 --disk 20
 
 ```bash
 npm run build:mac      # DMGs for Apple Silicon and Intel   → release/
+npm run build:mac:share  # one universal DMG (both CPUs) to share
 npm run build:win      # NSIS installer (x64)
 npm run build:linux    # AppImage (x64)
 npm run verify:package # checks a macOS build: signature, fuses, native modules,

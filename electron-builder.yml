@@ -54,9 +54,28 @@ mac:
   identity: '-'
   hardenedRuntime: true
   gatekeeperAssess: false
+  # A universal build merges the x64 and arm64 apps. Each keychain binary is
+  # single-arch and identical in both, so it is kept as-is rather than merged.
+  x64ArchFiles: '**/node_modules/@napi-rs/keyring-darwin-*/*.node'
 
 dmg:
   artifactName: ${productName}-${version}-mac-${arch}.dmg
+  window:
+    width: 540
+    height: 400
+  contents:
+    - x: 140
+      y: 150
+    - x: 400
+      y: 150
+      type: link
+      path: /Applications
+    # Shown beside the app, so people who get the DMG know how to open an
+    # app that isn't notarised yet.
+    - x: 270
+      y: 290
+      type: file
+      path: resources/dmg/How to install Fly.txt
 
 win:
   files:

@@ -1,0 +1,40 @@
+How to install Fly
+==================
+
+Fly works on any Mac with macOS 13 (Ventura) or newer, Apple Silicon or Intel.
+
+1. In this window, drag Fly onto the Applications folder.
+
+2. Open your Applications folder and double-click Fly.
+
+   The first time, macOS stops it with a message like:
+   "Apple could not verify 'Fly' is free of malware..."
+   Click Done. (Don't click Move to Trash.)
+
+3. Open System Settings > Privacy & Security.
+   Scroll down to the Security section. Next to
+   "'Fly' was blocked to protect your Mac", click Open Anyway.
+   Confirm with Open Anyway and your password or Touch ID.
+
+4. Fly opens. You only have to do this once.
+
+On macOS 14 (Sonoma) or older there's a shortcut instead of steps 2-3:
+right-click (or Control-click) Fly in Applications, choose Open, then Open.
+
+
+Why does macOS warn about Fly?
+------------------------------
+Fly isn't signed with a paid Apple Developer certificate yet, so macOS asks
+you to confirm that you trust it before it opens the first time.
+
+
+If macOS says Fly "is damaged and can't be opened"
+--------------------------------------------------
+Open Terminal (Applications > Utilities) and run this line, then open Fly again:
+
+    xattr -dr com.apple.quarantine /Applications/Fly.app
+
+
+Uninstalling
+------------
+Drag Fly from Applications to the Trash.
