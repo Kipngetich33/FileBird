@@ -52,7 +52,7 @@ export function PaneHeader({
         <ToolbarButton label="Parent folder" disabled={!canGoUp} onClick={onUp}>
           <path d="M8 13V3.5M3.5 8 8 3.5 12.5 8" />
         </ToolbarButton>
-        <ToolbarButton label="Refresh" disabled={path === null} onClick={onRefresh}>
+        <ToolbarButton label="Refresh" disabled={path === null} spinning={loading} onClick={onRefresh}>
           <path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3" />
         </ToolbarButton>
       </div>
@@ -67,7 +67,12 @@ export function PaneHeader({
         <bdi dir="ltr">{path ?? ''}</bdi>
       </span>
 
-      {loading && <span className="shrink-0 text-[11px] text-zinc-500">Loading…</span>}
+      {/* The Refresh icon spins; the words are for screen readers, so a narrow header never loses its buttons. */}
+      {loading && (
+        <span role="status" className="sr-only">
+          Loading…
+        </span>
+      )}
       {actions}
     </div>
   )
@@ -76,11 +81,12 @@ export function PaneHeader({
 interface ToolbarButtonProps {
   label: string
   disabled: boolean
+  spinning?: boolean
   onClick: () => void
   children: ReactNode
 }
 
-function ToolbarButton({ label, disabled, onClick, children }: ToolbarButtonProps): JSX.Element {
+function ToolbarButton({ label, disabled, spinning = false, onClick, children }: ToolbarButtonProps): JSX.Element {
   return (
     <button
       type="button"
@@ -90,7 +96,7 @@ function ToolbarButton({ label, disabled, onClick, children }: ToolbarButtonProp
       onClick={onClick}
       className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
     >
-      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-none stroke-current stroke-[1.6]" aria-hidden>
+      <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 fill-none stroke-current stroke-[1.6] ${spinning ? 'animate-spin' : ''}`} aria-hidden>
         {children}
       </svg>
     </button>

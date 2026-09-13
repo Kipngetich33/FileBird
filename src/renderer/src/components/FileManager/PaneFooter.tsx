@@ -4,14 +4,22 @@ import { formatSize, typeLabel } from '@renderer/utils/file-entries'
 
 interface PaneFooterProps {
   count: number | null
-  selected: FileEntry | null
+  selected: FileEntry[]
+}
+
+function describeSelection(selected: FileEntry[]): string {
+  const [only] = selected
+  if (only === undefined) return ''
+  if (selected.length === 1) return `${only.name} · ${only.kind === 'file' ? formatSize(only.size) : typeLabel(only)}`
+  const files = selected.filter((entry) => entry.kind === 'file')
+  const bytes = files.reduce((sum, entry) => sum + (entry.size ?? 0), 0)
+  return files.length === 0 ? `${selected.length} selected` : `${selected.length} selected · ${formatSize(bytes)}`
 }
 
 /** One pane's own status: how many items, and what is selected. */
 export function PaneFooter({ count, selected }: PaneFooterProps): JSX.Element {
   const items = count === null ? '' : count === 1 ? '1 item' : `${count} items`
-  const detail =
-    selected === null ? '' : `${selected.name} · ${selected.kind === 'file' ? formatSize(selected.size) : typeLabel(selected)}`
+  const detail = describeSelection(selected)
 
   return (
     <div

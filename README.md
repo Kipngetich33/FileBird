@@ -103,21 +103,28 @@ focus it and use ←/→; double-click resets) — the position is remembered.
 | `↑` `↓` · `Enter` · `Backspace` | Select · Open · Parent folder |
 | `Cmd+R` or `F5` | Refresh the active pane |
 | `Cmd+[` · `Cmd+↑` | Back · Parent folder (Go menu) |
-| `Cmd+T` | Transfer the active pane's selected file to the other pane's folder |
+| Click · `Cmd`-click · `Shift`-click · `Shift+↑/↓` · `Cmd+A` | Select · add or remove · select a range · select all |
+| `Cmd+T` | Transfer the active pane's selection to the other pane's folder |
 
 ## Transferring files
 
-Select a file and press **Upload** (local pane), **Download** (remote pane) or
-`Cmd+T`. The file goes to the folder the other pane is showing; that pane
-refreshes when it arrives. The bar above the status bar shows progress and speed,
-and **Cancel** stops the transfer.
+Select files and folders and press **Upload** (local pane), **Download** (remote
+pane) or `Cmd+T`. They go to the folder the other pane is showing, which refreshes
+as they arrive. Folders are copied with everything inside them.
 
-- If a file with that name already exists, Fly asks: **Replace**, **Keep both**
-  (saves `name (1).ext`) or **Cancel**. A folder is never replaced.
+- **The Transfers panel** lists every file: Queued, Running (with progress and
+  speed), Completed, Failed or Cancelled. Three run at a time. Cancel or Retry any
+  of them, or use Cancel all / Retry failed / Clear finished.
+- **If names already exist**, Fly asks once for the whole request: **Replace**
+  (folders are merged — files with the same name are replaced, nothing is
+  deleted), **Keep both** (saves `name (1).ext`), **Skip** or **Cancel**. A file
+  never replaces a folder.
+- **If the connection drops**, the unfinished files are marked Failed. Reconnect
+  and choose **Retry failed**.
 - Files are written under a hidden temporary name and renamed only once complete,
   so a failed or cancelled transfer never leaves a half-written file behind.
-  Permissions and the modification time are kept.
-- One file at a time for now; folders, multiple files and a queue come next.
+  Permissions and modification times are kept. Links to folders inside a folder
+  being transferred are skipped (and reported).
 
 ## Security notes
 

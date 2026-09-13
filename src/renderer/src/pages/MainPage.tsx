@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import type { FileEntry } from '@shared/types/files'
+import type { TransferJob } from '@shared/types/transfers'
 import { FilePane } from '@renderer/components/FileManager/FilePane'
 import { RemotePane } from '@renderer/components/FileManager/RemotePane'
 import { TransferButton } from '@renderer/components/FileManager/TransferButton'
@@ -7,10 +8,10 @@ import type { PaneHandle, PaneId } from '@renderer/components/FileManager/pane'
 import { SplitLayout } from '@renderer/components/Layout/SplitLayout'
 import { StatusBar } from '@renderer/components/Layout/StatusBar'
 import { ConflictDialog } from '@renderer/components/Transfers/ConflictDialog'
-import { TransferBar } from '@renderer/components/Transfers/TransferBar'
+import { TransferPanel } from '@renderer/components/Transfers/TransferPanel'
 import { useDirectory } from '@renderer/hooks/useDirectory'
 import type { RemoteConnectionState } from '@renderer/hooks/useRemoteConnection'
-import { useTransfers } from '@renderer/hooks/useTransfers'
+import { useTransferQueue } from '@renderer/hooks/useTransferQueue'
 import { appService } from '@renderer/services/app.service'
 import { localFilesService } from '@renderer/services/local-files.service'
 
@@ -19,33 +20,81 @@ interface MainPageProps {
   remote: RemoteConnectionState
 }
 
+/** Completed jobs arrive in bursts; the destination pane refreshes once they settle. */
+const REFRESH_DEBOUNCE_MS = 400
+
 /**
  * Local | Remote, side by side and independent (spec Milestone 5). Exactly one
  * pane is active, the one focus last entered, and menu commands act on it.
+ * The transfer queue (Milestone 7) spans both panes, so it lives here too.
  */
 export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
   const local = useDirectory(localFilesService)
   const [active, setActive] = useState<PaneId>('local')
   const localRef = useRef<PaneHandle>(null)
   const remoteRef = useRef<PaneHandle>(null)
-  const transfers = useTransfers()
+  const [panelExpanded, setPanelExpanded] = useState(false)
+  // Once the user hides the panel, new requests don't reopen it until the queue is idle again.
+  const hiddenWhileBusy = useRef(false)
+
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRefresh = useRef({ local: new Set<string>(), remote: new Set<string>() })
+  const refreshSoon = (side: PaneId, directory: string): void => {
+    pendingRefresh.current[side].add(directory)
+    if (refreshTimer.current !== null) return
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null
+      for (const side of ['local', 'remote'] as const) {
+        for (const directory of pendingRefresh.current[side]) (side === 'local' ? localRef : remoteRef).current?.refreshIfShowing(directory)
+        pendingRefresh.current[side].clear()
+      }
+    }, REFRESH_DEBOUNCE_MS)
+  }
+  useEffect(() => () => {
+    if (refreshTimer.current !== null) clearTimeout(refreshTimer.current)
+  }, [])
+
+  const destinationSide = (direction: TransferJob['direction']): PaneId => (direction === 'upload' ? 'remote' : 'local')
+
+  const transfers = useTransferQueue({
+    onQueued: (request) => {
+      // New folders exist at the destination as soon as a request is queued.
+      refreshSoon(destinationSide(request.direction), request.destinationDirectory)
+      if (!hiddenWhileBusy.current) setPanelExpanded(true)
+    },
+    onCompleted: (jobs) => {
+      for (const job of jobs) refreshSoon(destinationSide(job.direction), job.destinationDirectory)
+    }
+  })
+
+  const queueBusy = transfers.summary.active > 0
+  useEffect(() => {
+    if (!queueBusy) hiddenWhileBusy.current = false
+  }, [queueBusy])
 
   // The subscription is made once, so it reads the active pane through a ref.
   const activeRef = useRef<PaneId>(active)
   activeRef.current = active
 
-  /** Sends the entry to the folder the other pane is showing. */
-  function transferEntry(from: PaneId, entry: FileEntry | null): void {
+  /** Sends the entries to the folder the other pane is showing. */
+  function transferEntries(from: PaneId, entries: FileEntry[]): void {
     const connection = remote.connection
     const direction = from === 'local' ? 'upload' : 'download'
     const destination = (from === 'local' ? remoteRef : localRef).current?.currentPath() ?? null
+    const transferable = entries.filter((entry) => entry.kind !== 'other')
     if (connection === null) return transfers.refuse('Connect to a server first.')
-    if (entry === null) return transfers.refuse(`Select a file to ${direction}.`)
+    if (entries.length === 0) return transfers.refuse(`Select files or folders to ${direction}.`)
+    if (transferable.length === 0) return transfers.refuse("Broken links and special files can't be transferred.")
     if (destination === null) return transfers.refuse('Wait for the other pane to finish loading.')
-    void transfers.start({ connectionId: connection.id, direction, sourcePath: entry.path, destinationDirectory: destination })
+    void transfers.start({
+      connectionId: connection.id,
+      direction,
+      sourcePaths: transferable.map((entry) => entry.path),
+      destinationDirectory: destination
+    })
   }
-  const transferRef = useRef(transferEntry)
-  transferRef.current = transferEntry
+  const transferRef = useRef(transferEntries)
+  transferRef.current = transferEntries
 
   useEffect(
     () =>
@@ -68,22 +117,19 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
             pane(activeRef.current)?.goUp()
             break
           case 'transfer':
-            transferRef.current(activeRef.current, pane(activeRef.current)?.selectedEntry() ?? null)
+            transferRef.current(activeRef.current, pane(activeRef.current)?.selectedEntries() ?? [])
             break
+          case 'select-all': {
+            // The menu owns Cmd+A, so text fields get their usual behaviour from here.
+            const focused = document.activeElement
+            if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) focused.select()
+            else pane(activeRef.current)?.selectAll()
+            break
+          }
         }
       }),
     []
   )
-
-  // Show the new file: refresh the destination pane if it is still on that folder.
-  const completed = transfers.transfer?.status === 'completed' ? transfers.transfer : null
-  useEffect(() => {
-    if (completed === null) return
-    const pane = completed.direction === 'upload' ? remoteRef : localRef
-    pane.current?.refreshIfShowing(completed.destinationDirectory)
-  }, [completed])
-
-  const selectedLocal = local.entries.find((entry) => entry.path === local.selectedPath) ?? null
 
   const activeLabel =
     active === 'local'
@@ -107,10 +153,9 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
               actions={
                 <TransferButton
                   direction="upload"
-                  entry={selectedLocal}
-                  busy={transfers.running}
+                  entries={local.selectedEntries}
                   unavailableReason={remote.connection === null ? 'Connect to a server to upload' : undefined}
-                  onClick={() => transferEntry('local', selectedLocal)}
+                  onClick={() => transferEntries('local', local.selectedEntries)}
                 />
               }
             />
@@ -122,17 +167,29 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
               active={active === 'remote'}
               onActivate={() => setActive('remote')}
               onSwitchPane={() => localRef.current?.focus()}
-              onDownload={(entry) => transferEntry('remote', entry)}
-              transferBusy={transfers.running}
+              onDownload={(entries) => transferEntries('remote', entries)}
+              activeTransfers={remote.connection === null ? 0 : transfers.activeCountFor(remote.connection.id)}
             />
           }
         />
       </main>
-      <TransferBar
-        transfer={transfers.transfer}
+      <TransferPanel
+        jobs={transfers.jobs}
+        summary={transfers.summary}
+        expanded={panelExpanded}
+        onToggle={() => {
+          if (panelExpanded && queueBusy) hiddenWhileBusy.current = true
+          setPanelExpanded(!panelExpanded)
+        }}
+        preparing={transfers.preparing}
+        notice={transfers.notice}
         refusal={transfers.refusal}
         onCancel={transfers.cancel}
-        onDismiss={transfers.dismiss}
+        onRetry={transfers.retry}
+        onCancelAll={transfers.cancelAll}
+        onRetryFailed={transfers.retryFailed}
+        onClearFinished={transfers.clearFinished}
+        onDismissNotice={transfers.dismissNotice}
         onDismissRefusal={transfers.dismissRefusal}
       />
       <StatusBar left={activeLabel} right={runtimeLabel} />
@@ -141,6 +198,7 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
           conflict={transfers.conflict}
           onReplace={() => void transfers.resolveConflict('replace')}
           onKeepBoth={() => void transfers.resolveConflict('keep-both')}
+          onSkip={() => void transfers.resolveConflict('skip')}
           onCancel={transfers.cancelConflict}
         />
       )}

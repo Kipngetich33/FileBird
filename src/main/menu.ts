@@ -32,8 +32,23 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
 
   template.push(
     { label: 'File', submenu: [isMac ? { role: 'close' } : { role: 'quit' }] },
-    // Required: without the Edit role, Cmd+C / Cmd+V / Cmd+A stop working in text fields on macOS.
-    { role: 'editMenu' },
+    // Required: without these roles, Cmd+C / Cmd+V stop working in text fields on macOS.
+    // Select All is a command instead: the role would swallow Cmd+A before a file
+    // list could see it. The renderer selects text in a focused field, files elsewhere.
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(isMac ? [{ role: 'pasteAndMatchStyle' } as const] : []),
+        { type: 'separator' },
+        command('select-all', 'Select All', 'CmdOrCtrl+A')
+      ]
+    },
     {
       label: 'View',
       submenu: [

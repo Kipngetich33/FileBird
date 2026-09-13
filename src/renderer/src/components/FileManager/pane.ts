@@ -10,7 +10,9 @@ export interface PaneHandle {
   goUp: () => void
   /** The folder being shown, or null while none is (loading, or not connected). */
   currentPath: () => string | null
-  selectedEntry: () => FileEntry | null
+  /** In display order; empty when nothing is selected. */
+  selectedEntries: () => FileEntry[]
+  selectAll: () => void
   /** Refreshes only if the pane is showing this folder, e.g. after a transfer into it. */
   refreshIfShowing: (path: string) => void
 }

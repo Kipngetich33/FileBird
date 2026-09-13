@@ -151,6 +151,20 @@ export class ConnectionService {
     return connection.provider
   }
 
+  /** Who a live connection is to, or null once it has closed. */
+  serverOf(connectionId: string): { host: string; port: number; username: string } | null {
+    const info = this.connections.get(connectionId)?.info
+    return info === undefined ? null : { host: info.host, port: info.port, username: info.username }
+  }
+
+  /** A live connection to this server as this user, e.g. to retry transfers after reconnecting. */
+  findLive(server: { host: string; port: number; username: string }): string | null {
+    for (const { info } of this.connections.values()) {
+      if (info.host === server.host && info.port === server.port && info.username === server.username) return info.id
+    }
+    return null
+  }
+
   async list(connectionId: string, path: string): Promise<DirectoryListing> {
     const connection = this.connections.get(connectionId)
     if (connection === undefined) throw notConnected()

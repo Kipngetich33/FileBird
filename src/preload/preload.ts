@@ -10,7 +10,7 @@ import type {
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
-import type { StartTransferOutcome, StartTransferRequest, TransferUpdate } from '../shared/types/transfers'
+import type { StartTransferOutcome, StartTransferRequest, TransferJob, TransferQueueUpdate } from '../shared/types/transfers'
 import type { SystemVersions } from '../shared/types/system'
 
 /**
@@ -67,9 +67,14 @@ const api = {
     start: (request: StartTransferRequest): Promise<StartTransferOutcome> =>
       ipcRenderer.invoke(IPC.TRANSFERS_START, request),
     cancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.TRANSFERS_CANCEL, id),
+    cancelAll: (): Promise<void> => ipcRenderer.invoke(IPC.TRANSFERS_CANCEL_ALL),
+    retry: (id: string): Promise<void> => ipcRenderer.invoke(IPC.TRANSFERS_RETRY, id),
+    retryFailed: (): Promise<number> => ipcRenderer.invoke(IPC.TRANSFERS_RETRY_FAILED),
+    clearFinished: (): Promise<void> => ipcRenderer.invoke(IPC.TRANSFERS_CLEAR_FINISHED),
+    list: (): Promise<TransferJob[]> => ipcRenderer.invoke(IPC.TRANSFERS_LIST),
     /** Returns an unsubscribe function. The listener receives the payload only. */
-    onUpdate: (listener: (update: TransferUpdate) => void): (() => void) => {
-      const forward = (_event: IpcRendererEvent, payload: TransferUpdate): void => listener(payload)
+    onUpdate: (listener: (update: TransferQueueUpdate) => void): (() => void) => {
+      const forward = (_event: IpcRendererEvent, payload: TransferQueueUpdate): void => listener(payload)
       ipcRenderer.on(IPC_EVENTS.TRANSFER_UPDATE, forward)
       return () => {
         ipcRenderer.removeListener(IPC_EVENTS.TRANSFER_UPDATE, forward)

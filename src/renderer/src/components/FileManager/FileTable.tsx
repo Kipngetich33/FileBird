@@ -1,6 +1,7 @@
-import { memo, type JSX } from 'react'
+import { memo, type JSX, type MouseEvent } from 'react'
 import type { FileEntry } from '@shared/types/files'
 import { formatModified, formatSize, shortDateFormat, typeLabel } from '@renderer/utils/file-entries'
+import type { SelectMode } from '@renderer/utils/selection'
 import { EntryIcon } from './EntryIcon'
 
 /**
@@ -13,16 +14,23 @@ const COLUMNS =
 
 interface FileTableProps {
   entries: FileEntry[]
-  selectedPath: string | null
+  selectedPaths: ReadonlySet<string>
+  /** The keyboard cursor row. */
+  cursorPath: string | null
   /** An inactive pane shows its selection muted, so only one pane looks "live". */
   active: boolean
-  onSelect: (path: string) => void
+  onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
 }
 
-export function FileTable({ entries, selectedPath, active, onSelect, onOpen }: FileTableProps): JSX.Element {
+/** Shift-click extends from the anchor; Cmd-click (Ctrl on Windows and Linux) toggles. */
+const modeOf = (event: MouseEvent): SelectMode =>
+  event.shiftKey ? 'range' : (navigator.platform.startsWith('Mac') ? event.metaKey : event.ctrlKey) ? 'toggle' : 'replace'
+
+export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen }: FileTableProps): JSX.Element {
+  const multiple = selectedPaths.size > 1
   return (
-    <div role="grid" aria-label="Files" className="@container min-w-0">
+    <div role="grid" aria-label="Files" aria-multiselectable="true" className="@container min-w-0">
       <div
         role="row"
         className={`${COLUMNS} sticky top-0 z-10 h-7 border-b border-white/[0.06] bg-[#11141b] text-[10px] font-medium tracking-wide text-zinc-500 uppercase`}
@@ -41,7 +49,8 @@ export function FileTable({ entries, selectedPath, active, onSelect, onOpen }: F
         <FileRow
           key={entry.path}
           entry={entry}
-          selected={entry.path === selectedPath}
+          selected={selectedPaths.has(entry.path)}
+          cursor={multiple && entry.path === cursorPath}
           active={active}
           onSelect={onSelect}
           onOpen={onOpen}
@@ -54,20 +63,26 @@ export function FileTable({ entries, selectedPath, active, onSelect, onOpen }: F
 interface FileRowProps {
   entry: FileEntry
   selected: boolean
+  /** Marks the keyboard cursor within a multi-selection. */
+  cursor: boolean
   active: boolean
-  onSelect: (path: string) => void
+  onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
 }
 
-// Memoised: moving the selection re-renders two rows, not the whole folder.
-const FileRow = memo(function FileRow({ entry, selected, active, onSelect, onOpen }: FileRowProps): JSX.Element {
+// Memoised: moving the selection re-renders the rows that change, not the whole folder.
+const FileRow = memo(function FileRow({ entry, selected, cursor, active, onSelect, onOpen }: FileRowProps): JSX.Element {
   return (
     <div
       role="row"
       aria-selected={selected}
       data-path={entry.path}
       data-kind={entry.kind}
-      onClick={() => onSelect(entry.path)}
+      onMouseDown={(event) => {
+        // Shift-click would otherwise select the text between rows.
+        if (event.shiftKey) event.preventDefault()
+      }}
+      onClick={(event) => onSelect(entry.path, modeOf(event))}
       onDoubleClick={() => onOpen(entry)}
       className={`${COLUMNS} h-7 cursor-default text-[12px] ${
         selected
@@ -75,7 +90,7 @@ const FileRow = memo(function FileRow({ entry, selected, active, onSelect, onOpe
             ? 'bg-sky-500/20 text-zinc-50'
             : 'bg-white/[0.08] text-zinc-200'
           : 'text-zinc-300 hover:bg-white/[0.03]'
-      } ${entry.isHidden ? 'opacity-55' : ''}`}
+      } ${cursor && active ? 'shadow-[inset_2px_0_0_0_rgb(56_189_248)]' : ''} ${entry.isHidden ? 'opacity-55' : ''}`}
     >
       <span role="gridcell" className="flex min-w-0 items-center gap-2">
         <EntryIcon entry={entry} />

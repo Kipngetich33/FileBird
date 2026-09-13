@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppErrorPayload } from '@shared/types/errors'
 import type { DirectoryListing, FileEntry } from '@shared/types/files'
 import { sortEntries } from '@renderer/utils/file-entries'
+import { EMPTY_SELECTION, applySelect, pruneSelection, selectAll, type SelectMode, type Selection } from '@renderer/utils/selection'
 
 /** Where a pane's listings come from. Local today; remote plugs in at Milestone 5. */
 export interface DirectorySource {
@@ -13,7 +14,11 @@ export interface DirectoryState {
   listing: DirectoryListing | null
   /** The listing's entries in display order. */
   entries: FileEntry[]
+  /** The cursor row: where keyboard moves start and what Enter opens. */
   selectedPath: string | null
+  selectedPaths: ReadonlySet<string>
+  /** Selected entries in display order. */
+  selectedEntries: FileEntry[]
   loading: boolean
   error: AppErrorPayload | null
   canGoBack: boolean
@@ -21,7 +26,8 @@ export interface DirectoryState {
   goUp: () => Promise<void>
   goBack: () => Promise<void>
   refresh: () => Promise<void>
-  select: (path: string | null) => void
+  select: (path: string | null, mode?: SelectMode) => void
+  selectAll: () => void
   dismissError: () => void
 }
 
@@ -35,7 +41,7 @@ export interface DirectoryState {
 export function useDirectory(source: DirectorySource): DirectoryState {
   const [listing, setListing] = useState<DirectoryListing | null>(null)
   const [history, setHistory] = useState<string[]>([])
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [rawSelection, setSelection] = useState<Selection>(EMPTY_SELECTION)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<AppErrorPayload | null>(null)
 
@@ -82,7 +88,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
       if (currentPath !== null && currentPath !== next.path) {
         setHistory((previous) => [...previous, currentPath])
       }
-      setSelectedPath(null)
+      setSelection(EMPTY_SELECTION)
     },
     [load, currentPath]
   )
@@ -94,7 +100,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     if (next === null) return
     setHistory((previous) => [...previous, currentPath])
     // Land on the folder we just left, as Finder and Explorer do.
-    setSelectedPath(currentPath)
+    setSelection(applySelect(EMPTY_SELECTION, [], currentPath))
   }, [load, listing, currentPath])
 
   const goBack = useCallback(async () => {
@@ -104,7 +110,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     // must not be stuck pressing Back on it forever.
     setHistory((previous) => previous.slice(0, -1))
     const next = await load(target)
-    if (next !== null) setSelectedPath(currentPath)
+    if (next !== null) setSelection(currentPath === null ? EMPTY_SELECTION : applySelect(EMPTY_SELECTION, [], currentPath))
   }, [load, history, currentPath])
 
   const refresh = useCallback(async () => {
@@ -112,11 +118,23 @@ export function useDirectory(source: DirectorySource): DirectoryState {
   }, [load, currentPath])
 
   const entries = useMemo(() => (listing === null ? [] : sortEntries(listing.entries)), [listing])
+  const order = useMemo(() => entries.map((entry) => entry.path), [entries])
+  // A refresh can remove selected rows; the selection only ever shows listed ones.
+  const selection = useMemo(() => pruneSelection(rawSelection, order), [rawSelection, order])
+  const selectedPaths = useMemo(() => new Set(selection.paths), [selection])
+  const selectedEntries = useMemo(() => entries.filter((entry) => selectedPaths.has(entry.path)), [entries, selectedPaths])
+
+  const select = useCallback(
+    (path: string | null, mode: SelectMode = 'replace') => setSelection((current) => applySelect(pruneSelection(current, order), order, path, mode)),
+    [order]
+  )
 
   return {
     listing,
     entries,
-    selectedPath,
+    selectedPath: selection.cursor,
+    selectedPaths,
+    selectedEntries,
     loading,
     error,
     canGoBack: history.length > 0,
@@ -124,7 +142,8 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     goUp,
     goBack,
     refresh,
-    select: setSelectedPath,
+    select,
+    selectAll: useCallback(() => setSelection((current) => selectAll(current, order)), [order]),
     dismissError: useCallback(() => setError(null), [])
   }
 }

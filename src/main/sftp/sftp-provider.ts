@@ -52,6 +52,8 @@ export interface SftpProvider {
   rename(from: string, to: string): Promise<void>
   /** Removes a file. */
   remove(path: string): Promise<void>
+  /** Creates a folder; 'exists' if a folder is already there. A file of that name is ALREADY_EXISTS. */
+  mkdir(path: string): Promise<'created' | 'exists'>
 }
 
 export interface RemoteFileStat {

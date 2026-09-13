@@ -1,37 +1,51 @@
 import type { JSX } from 'react'
 import type { FileFacts } from '@shared/types/transfers'
 import { DANGER_BUTTON, Dialog, PRIMARY_BUTTON, SECONDARY_BUTTON } from '@renderer/components/Connection/Dialog'
-import type { TransferConflict } from '@renderer/hooks/useTransfers'
+import type { PendingConflict } from '@renderer/hooks/useTransferQueue'
 import { formatModified, formatSize } from '@renderer/utils/file-entries'
 
 interface ConflictDialogProps {
-  conflict: TransferConflict
+  conflict: PendingConflict
   onReplace: () => void
   onKeepBoth: () => void
+  onSkip: () => void
   onCancel: () => void
 }
 
+const NAMES_SHOWN = 5
+
 /**
- * The destination already has something by that name. Cancel is focused, so
- * Enter never replaces a file by accident; a folder is never replaceable.
+ * Names that already exist at the destination (Milestone 7 plan D2). Cancel is
+ * focused, so Enter never replaces anything; nothing has been touched yet.
  */
-export function ConflictDialog({ conflict, onReplace, onKeepBoth, onCancel }: ConflictDialogProps): JSX.Element {
-  const where = conflict.request.direction === 'upload' ? 'on the server' : 'on this computer'
-  const what = conflict.existing.isDirectory ? 'A folder' : 'A file'
+export function ConflictDialog({ conflict, onReplace, onKeepBoth, onSkip, onCancel }: ConflictDialogProps): JSX.Element {
+  const { conflicts, conflictCount, itemCount, request } = conflict
+  const [first] = conflicts
+  const single = conflictCount === 1 && first !== undefined
+  const where = request.direction === 'upload' ? 'on the server' : 'on this computer'
+  const replaceable = conflicts.some((item) => item.canReplace)
+  const folders = conflicts.some((item) => item.canReplace && item.existing.isDirectory)
+  // Skip only means something when some items don't conflict.
+  const canSkip = itemCount > conflictCount
 
   return (
     <Dialog
-      title={`"${conflict.name}" already exists`}
+      title={single ? `"${first.name}" already exists` : `${conflictCount} items already exist`}
       onDismiss={onCancel}
       actions={
         <>
           <button type="button" data-autofocus onClick={onCancel} className={SECONDARY_BUTTON}>
             Cancel
           </button>
-          <button type="button" onClick={onKeepBoth} className={conflict.canReplace ? SECONDARY_BUTTON : PRIMARY_BUTTON}>
+          {canSkip && (
+            <button type="button" onClick={onSkip} className={SECONDARY_BUTTON}>
+              Skip
+            </button>
+          )}
+          <button type="button" onClick={onKeepBoth} className={replaceable ? SECONDARY_BUTTON : PRIMARY_BUTTON}>
             Keep both
           </button>
-          {conflict.canReplace && (
+          {replaceable && (
             <button type="button" onClick={onReplace} className={DANGER_BUTTON}>
               Replace
             </button>
@@ -40,16 +54,44 @@ export function ConflictDialog({ conflict, onReplace, onKeepBoth, onCancel }: Co
       }
     >
       <p>
-        {what} with this name already exists in <span className="font-mono text-zinc-300">{conflict.request.destinationDirectory}</span>{' '}
-        {where}.{' '}
-        {conflict.canReplace
-          ? 'Replace it, or keep both and save the new file with a number added to its name.'
-          : 'A folder is never replaced by a file. You can keep both and save the file with a number added to its name.'}
+        {single ? (first.existing.isDirectory ? 'A folder' : 'A file') : 'Items'} with {single ? 'this name already exists' : 'these names already exist'} in{' '}
+        <span className="font-mono text-zinc-300">{request.destinationDirectory}</span> {where}.
       </p>
-      <div className="grid grid-cols-2 gap-2">
-        <Facts label="Existing" facts={conflict.existing} testId="conflict-existing" />
-        <Facts label="New" facts={conflict.incoming} testId="conflict-incoming" />
-      </div>
+      {single ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Facts label="Existing" facts={first.existing} testId="conflict-existing" />
+          <Facts label="New" facts={first.incoming} testId="conflict-incoming" />
+        </div>
+      ) : (
+        <ul data-testid="conflict-names" className="rounded-md border border-white/[0.07] bg-black/30 px-3 py-2 font-mono text-[11px] text-zinc-300">
+          {conflicts.slice(0, NAMES_SHOWN).map((item) => (
+            <li key={item.name} className="truncate">
+              {item.name}
+              {item.existing.isDirectory ? '/' : ''}
+            </li>
+          ))}
+          {conflictCount > NAMES_SHOWN && <li className="text-zinc-500">and {conflictCount - NAMES_SHOWN} more</li>}
+        </ul>
+      )}
+      <ul className="list-disc space-y-1 pl-4">
+        {replaceable && (
+          <li>
+            <span className="text-zinc-200">Replace</span> overwrites existing files.
+            {folders && ' Folders are merged: files with the same name are replaced, and nothing else is deleted.'}
+          </li>
+        )}
+        {conflicts.some((item) => !item.canReplace) && (
+          <li>A file never replaces a folder, or the reverse; those are left out if you choose Replace.</li>
+        )}
+        <li>
+          <span className="text-zinc-200">Keep both</span> adds a number to the new {single ? 'name' : 'names'}.
+        </li>
+        {canSkip && (
+          <li>
+            <span className="text-zinc-200">Skip</span> transfers only the items that don't exist yet.
+          </li>
+        )}
+      </ul>
     </Dialog>
   )
 }

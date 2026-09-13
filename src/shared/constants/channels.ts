@@ -25,7 +25,12 @@ export const IPC = {
   SSH_CONFIG_PREVIEW: 'ssh-config:preview',
   SSH_CONFIG_IMPORT: 'ssh-config:import',
   TRANSFERS_START: 'transfers:start',
-  TRANSFERS_CANCEL: 'transfers:cancel'
+  TRANSFERS_CANCEL: 'transfers:cancel',
+  TRANSFERS_CANCEL_ALL: 'transfers:cancel-all',
+  TRANSFERS_RETRY: 'transfers:retry',
+  TRANSFERS_RETRY_FAILED: 'transfers:retry-failed',
+  TRANSFERS_CLEAR_FINISHED: 'transfers:clear-finished',
+  TRANSFERS_LIST: 'transfers:list'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

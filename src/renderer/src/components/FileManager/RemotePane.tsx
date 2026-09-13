@@ -35,13 +35,14 @@ interface RemotePaneProps {
   onActivate: () => void
   onSwitchPane: () => void
   ref?: Ref<PaneHandle>
-  /** Downloads the selected file into the local pane's folder. */
-  onDownload: (entry: FileEntry) => void
-  transferBusy: boolean
+  /** Downloads the selection into the local pane's folder. */
+  onDownload: (entries: FileEntry[]) => void
+  /** Queued or running transfers on the current connection. */
+  activeTransfers: number
 }
 
 /** The right-hand pane: saved connections until connected, then the remote file browser. */
-export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, transferBusy }: RemotePaneProps): JSX.Element {
+export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, activeTransfers }: RemotePaneProps): JSX.Element {
   const saved = useConnectionProfiles()
   const connectedPaneRef = useRef<PaneHandle>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -51,6 +52,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
   const [deleting, setDeleting] = useState<ConnectionSummary | null>(null)
   const [formError, setFormError] = useState<AppErrorPayload | null>(null)
   const [listNotice, setListNotice] = useState<string | null>(null)
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false)
 
   const { reload } = saved
   const connectionId = remote.connection?.id ?? null
@@ -71,7 +73,8 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
       goBack: () => connectedPaneRef.current?.goBack(),
       goUp: () => connectedPaneRef.current?.goUp(),
       currentPath: () => (connected ? (connectedPaneRef.current?.currentPath() ?? null) : null),
-      selectedEntry: () => (connected ? (connectedPaneRef.current?.selectedEntry() ?? null) : null),
+      selectedEntries: () => (connected ? (connectedPaneRef.current?.selectedEntries() ?? []) : []),
+      selectAll: () => connectedPaneRef.current?.selectAll(),
       refreshIfShowing: (path) => connectedPaneRef.current?.refreshIfShowing(path)
     }),
     [connected, reload]
@@ -125,11 +128,11 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
           onActivate={onActivate}
           onSwitchPane={onSwitchPane}
           connection={remote.connection}
-          onDisconnect={remote.disconnect}
+          // Transfers still running would be cancelled: ask first.
+          onDisconnect={() => (activeTransfers > 0 ? setConfirmingDisconnect(true) : void remote.disconnect())}
           notice={remote.notice}
           onDismissNotice={remote.dismissNotice}
           onDownload={onDownload}
-          transferBusy={transferBusy}
         />
       ) : (
         <section
@@ -242,6 +245,19 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
         />
       )}
 
+      {confirmingDisconnect && remote.connection !== null && (
+        <ConfirmDialog
+          title="Disconnect and cancel transfers?"
+          message={`${activeTransfers === 1 ? '1 transfer is' : `${activeTransfers} transfers are`} still queued or running on ${remote.connection.host}. Disconnecting cancels ${activeTransfers === 1 ? 'it' : 'them'}; you can retry later.`}
+          confirmLabel="Disconnect"
+          onConfirm={() => {
+            setConfirmingDisconnect(false)
+            void remote.disconnect()
+          }}
+          onCancel={() => setConfirmingDisconnect(false)}
+        />
+      )}
+
       {deleting !== null && (
         <ConfirmDialog
           title={`Delete "${deleting.name}"?`}
@@ -268,11 +284,10 @@ interface ConnectedPaneProps {
   onActivate: () => void
   onSwitchPane: () => void
   connection: ConnectionInfo
-  onDisconnect: () => Promise<void>
+  onDisconnect: () => void
   notice: string | null
   onDismissNotice: () => void
-  onDownload: (entry: FileEntry) => void
-  transferBusy: boolean
+  onDownload: (entries: FileEntry[]) => void
 }
 
 function ConnectedPane({
@@ -284,8 +299,7 @@ function ConnectedPane({
   onDisconnect,
   notice,
   onDismissNotice,
-  onDownload,
-  transferBusy
+  onDownload
 }: ConnectedPaneProps): JSX.Element {
   const source = useMemo<DirectorySource>(
     () => ({
@@ -296,7 +310,6 @@ function ConnectedPane({
   )
   const directory = useDirectory(source)
   const where = connection.port === 22 ? connection.host : `${connection.host}:${connection.port}`
-  const selected = directory.entries.find((entry) => entry.path === directory.selectedPath) ?? null
 
   return (
     <FilePane
@@ -311,15 +324,10 @@ function ConnectedPane({
       onDismissNotice={onDismissNotice}
       actions={
         <>
-          <TransferButton
-            direction="download"
-            entry={selected}
-            busy={transferBusy}
-            onClick={() => selected !== null && onDownload(selected)}
-          />
+          <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />
           <button
             type="button"
-            onClick={() => void onDisconnect()}
+            onClick={onDisconnect}
             className="shrink-0 rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-400 transition hover:border-white/20 hover:text-zinc-100"
           >
             Disconnect

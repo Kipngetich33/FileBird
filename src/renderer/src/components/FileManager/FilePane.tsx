@@ -52,8 +52,8 @@ export function FilePane({
   notice,
   onDismissNotice
 }: FilePaneProps): JSX.Element {
-  const { listing, entries, selectedPath, loading, error, canGoBack } = directory
-  const { open, goUp, goBack, refresh, select, dismissError } = directory
+  const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, error, canGoBack } = directory
+  const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
   const paneRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -67,12 +67,13 @@ export function FilePane({
       goBack: () => void goBack(),
       goUp: () => void goUp(),
       currentPath: () => listing?.path ?? null,
-      selectedEntry: () => entries.find((entry) => entry.path === selectedPath) ?? null,
+      selectedEntries: () => selectedEntries,
+      selectAll,
       refreshIfShowing: (path) => {
         if (listing?.path === path) void refresh()
       }
     }),
-    [refresh, goBack, goUp, listing, entries, selectedPath]
+    [refresh, goBack, goUp, listing, selectedEntries, selectAll]
   )
 
   // Keep the selected row in view as the keyboard moves it.
@@ -119,9 +120,17 @@ export function FilePane({
               ? 0
               : entries.length - 1
             : Math.min(entries.length - 1, Math.max(0, current + step))
-        select(entries[next]?.path ?? null)
+        select(entries[next]?.path ?? null, event.shiftKey ? 'range' : 'replace')
         return
       }
+      case 'a':
+      case 'A':
+        // Usually arrives as the Edit menu's Select All command; handled here too.
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault()
+          selectAll()
+        }
+        return
       case 'Enter': {
         event.preventDefault()
         const entry = entries.find((candidate) => candidate.path === selectedPath)
@@ -139,7 +148,6 @@ export function FilePane({
     }
   }
 
-  const selected = entries.find((entry) => entry.path === selectedPath) ?? null
 
   return (
     <section
@@ -201,7 +209,8 @@ export function FilePane({
         {listing !== null && (
           <FileTable
             entries={entries}
-            selectedPath={selectedPath}
+            selectedPaths={selectedPaths}
+            cursorPath={selectedPath}
             active={active}
             onSelect={select}
             onOpen={openEntry}
@@ -212,7 +221,7 @@ export function FilePane({
         )}
       </div>
 
-      <PaneFooter count={listing === null ? null : entries.length} selected={selected} />
+      <PaneFooter count={listing === null ? null : entries.length} selected={selectedEntries} />
     </section>
   )
 }

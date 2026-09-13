@@ -20,8 +20,11 @@ const PLATFORMS: NodeJS.Platform[] = ['darwin', 'win32', 'linux']
 
 describe('buildApplicationMenu', () => {
   describe.each(PLATFORMS)('on %s', (platform) => {
-    it('keeps the Edit role, so copy and paste work in text fields', () => {
-      expect(roles(buildApplicationMenu({ platform, isDev: false, send: () => undefined }))).toContain('editmenu')
+    it('keeps the edit roles, so undo, cut, copy and paste work in text fields', () => {
+      const edit = flatten(buildApplicationMenu({ platform, isDev: false, send: () => undefined })).filter(({ parent }) => parent === 'Edit')
+      const editRoles = edit.map(({ item }) => String(item.role ?? '').toLowerCase())
+      expect(editRoles).toEqual(expect.arrayContaining(['undo', 'redo', 'cut', 'copy', 'paste']))
+      expect(edit.some(({ item }) => item.id === menuItemId('select-all'))).toBe(true)
     })
 
     it('never binds reload in View, and ships no reload or DevTools when packaged', () => {
@@ -59,9 +62,9 @@ describe('buildApplicationMenu', () => {
   })
 
   it.each([
-    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T' }],
-    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T' }],
-    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T' }]
+    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }],
+    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }],
+    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }]
   ] as const)('uses platform-appropriate shortcuts on %s', (platform, expected) => {
     const template = buildApplicationMenu({ platform, isDev: false, send: () => undefined })
     const accelerators = Object.fromEntries(

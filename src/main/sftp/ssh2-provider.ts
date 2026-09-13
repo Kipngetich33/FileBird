@@ -329,6 +329,22 @@ export class Ssh2SftpProvider implements SftpProvider {
     }
   }
 
+  async mkdir(path: string): Promise<'created' | 'exists'> {
+    const sftp = this.requireSession()
+    try {
+      await new Promise<void>((resolve, reject) => {
+        sftp.mkdir(path, (error) => (error ? reject(error) : resolve()))
+      })
+      return 'created'
+    } catch (error) {
+      // OpenSSH reports an existing name only as a generic failure; look.
+      const existing = await this.stat(path).catch(() => null)
+      if (existing?.kind === 'directory') return 'exists'
+      if (existing !== null) throw new AppError('ALREADY_EXISTS', 'A file with this name already exists on the server.')
+      throw this.toRequestError(error)
+    }
+  }
+
   remove(path: string): Promise<void> {
     const sftp = this.requireSession()
     return new Promise((resolve, reject) => {

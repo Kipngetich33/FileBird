@@ -3,36 +3,33 @@ import type { FileEntry } from '@shared/types/files'
 
 interface TransferButtonProps {
   direction: 'upload' | 'download'
-  /** The selected entry; only a file can be transferred for now. */
-  entry: FileEntry | null
-  /** A transfer is already running, or the other side isn't ready. */
-  busy: boolean
+  /** The selected entries; files and folders can be transferred. */
+  entries: FileEntry[]
   /** Why the button is unavailable, when it isn't about the selection. */
   unavailableReason?: string
   onClick: () => void
 }
 
-/** Upload (local pane) or Download (remote pane) for the selected file. */
-export function TransferButton({ direction, entry, busy, unavailableReason, onClick }: TransferButtonProps): JSX.Element {
+/** Upload (local pane) or Download (remote pane) for the selection. Transfers queue, so it is never busy. */
+export function TransferButton({ direction, entries, unavailableReason, onClick }: TransferButtonProps): JSX.Element {
   const label = direction === 'upload' ? 'Upload' : 'Download'
+  const transferable = entries.filter((entry) => entry.kind !== 'other')
   const reason =
     unavailableReason ??
-    (busy
-      ? 'Wait for the current transfer to finish'
-      : entry === null
-        ? `Select a file to ${label.toLowerCase()}`
-        : entry.kind !== 'file'
-          ? 'Only files can be transferred for now'
-          : null)
-  const title = reason ?? `${label} ${entry?.name ?? ''} (⌘T)`
+    (entries.length === 0
+      ? `Select files or folders to ${label.toLowerCase()}`
+      : transferable.length === 0
+        ? "Broken links and special files can't be transferred"
+        : null)
+  const what = transferable.length === 1 ? (transferable[0]?.name ?? '') : `${transferable.length} items`
 
   return (
     <button
       type="button"
       disabled={reason !== null}
       onClick={onClick}
-      title={title}
-      aria-label={reason === null ? `${label} ${entry?.name ?? ''}` : label}
+      title={reason ?? `${label} ${what} (⌘T)`}
+      aria-label={reason === null ? `${label} ${what}` : label}
       data-testid={`${direction}-button`}
       className="inline-flex shrink-0 items-center gap-1 rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:border-sky-500/40 hover:text-sky-200 disabled:pointer-events-none disabled:opacity-35"
     >

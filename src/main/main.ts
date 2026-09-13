@@ -16,7 +16,7 @@ import { SshConfigImportService } from './services/ssh-config-import.service'
 import { HostKeyStore } from './sftp/host-keys'
 import { Ssh2SftpProvider } from './sftp/ssh2-provider'
 import { SshConfigImporter } from './ssh/ssh-config'
-import { TransferService } from './transfers/transfer.service'
+import { TransferQueue } from './transfers/queue'
 import { ConnectionStorage } from './storage/connection-storage'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
@@ -25,7 +25,7 @@ const isDev = !app.isPackaged
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
 let connections: ConnectionService | null = null
-let transfers: TransferService | null = null
+let transfers: TransferQueue | null = null
 
 /**
  * The home folder Fly starts in and reads ~/.ssh/config from. Unpackaged builds
@@ -109,12 +109,13 @@ void app.whenReady().then(() => {
     hostKeys: new HostKeyStore(join(userData, 'known-hosts.json')),
     createProvider: () => new Ssh2SftpProvider(),
     onConnectionClosed: (event) => {
+      void transfers?.connectionClosed(event.connectionId, 'lost')
       for (const window of BrowserWindow.getAllWindows()) {
         window.webContents.send(IPC_EVENTS.SFTP_CONNECTION_CLOSED, event)
       }
     }
   })
-  registerSftpIpc(connections)
+  registerSftpIpc(connections, { beforeDisconnect: async (id) => transfers?.connectionClosed(id, 'disconnected') })
 
   const profiles = new ConnectionProfilesService({
     storage: new ConnectionStorage(join(userData, 'connections.json')),
@@ -128,8 +129,12 @@ void app.whenReady().then(() => {
   registerConnectionsIpc({ profiles, imports, pickPrivateKey })
 
   const liveConnections = connections
-  transfers = new TransferService({
-    providerFor: (connectionId) => liveConnections.providerFor(connectionId),
+  transfers = new TransferQueue({
+    connections: {
+      providerFor: (connectionId) => liveConnections.providerFor(connectionId),
+      serverOf: (connectionId) => liveConnections.serverOf(connectionId),
+      findLive: (server) => liveConnections.findLive(server)
+    },
     emit: (update) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send(IPC_EVENTS.TRANSFER_UPDATE, update)
     }
@@ -158,7 +163,16 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
-  transfers?.cancelAll()
-  void connections?.disconnectAll()
+let readyToQuit = false
+app.on('before-quit', (event) => {
+  if (readyToQuit) return
+  // Give cancelled transfers a moment to remove their temporary files before
+  // the connections close under them (bounded by the queue's settle timeout).
+  event.preventDefault()
+  readyToQuit = true
+  void (transfers?.cancelAll() ?? Promise.resolve())
+    .then(() => connections?.disconnectAll())
+    // A later task, not a microtask: quitting again while Electron is still inside
+    // the quit that was just prevented leaves the app running with no windows.
+    .finally(() => setTimeout(() => app.quit(), 0))
 })
