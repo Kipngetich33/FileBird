@@ -16,13 +16,14 @@ Targets macOS (primary), Windows, Linux.
 | `docs/MILESTONE-6-PLAN.md` | M6 plan: transfers — throughput research, safe writes, cancel, conflicts. |
 | `docs/MILESTONE-7-PLAN.md` | M7 plan: transfer queue — planning, folders, concurrency, retry, multi-select. |
 | `docs/MILESTONE-8-PLAN.md` | M8 plan: file operations — create folder, rename, delete (Trash locally), guard rails. |
-| `docs/MILESTONE-9-PLAN.md` | Latest milestone plan: drag and drop between panes, navigation hardening. |
+| `docs/MILESTONE-9-PLAN.md` | M9 plan: drag and drop between panes, navigation hardening. |
+| `docs/MILESTONE-10-PLAN.md` | Latest milestone plan: packaging — DMGs, Windows/Linux cross-builds, fuses, verification. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–9 ✅ done — runtime-verified and committed on `main`.**
+**All 10 milestones ✅ done — runtime-verified and committed on `main`.**
 
 Two independent panes (Local | Remote) with a resizable, remembered divider, an
 active pane (follows focus; Tab from a list switches), per-pane footers, and a
@@ -41,12 +42,18 @@ are permanent and never follow links; home, root and ancestors are refused in ma
 Drag and drop (M9): drag rows (the selection) onto the other pane's listing or a
 folder row; it becomes an ordinary queued transfer. Same-pane and external drags
 are refused; navigation is limited to the app's own page.
-Verified by `npm test` (387 unit), `npm run test:integration` (62: real OpenSSH,
-Keychain, `ssh`) and `npm run smoke` (110 checks driving the real app).
+Packaging (M10): `npm run build:mac|win|linux` → `release/` (DMGs arm64 + x64,
+NSIS x64, AppImage x64); ad-hoc signed only, fuses flipped, production CSP;
+`npm run verify:package` checks a build and runs the x64 `.app` against a test
+server. Asks before quitting/closing with active transfers.
+Verified by `npm test` (390 unit), `npm run test:integration` (62: real OpenSSH,
+Keychain, `ssh`), `npm run smoke` (112 checks driving the real app) and
+`npm run verify:package` (15 checks on the x64 DMG's app).
 
-Next: **Milestone 10 (Packaging)** — §21, §22: production macOS app, DMG,
-installation instructions, then Windows/Linux. Unsigned builds only; signing or
-publishing needs the user's explicit go-ahead.
+Next: **the user's review** of M6–M10. Not done without their explicit go-ahead:
+Developer ID signing/notarisation, publishing, importing their real
+`~/.ssh/config`, connecting to their servers. Untested here: the arm64 build
+(Intel Mac), Windows and Linux builds (cross-built, statically verified).
 The user asked (2026-09-13) for M6–M10 to proceed without approval stops, using
 Claude's own recommendations; each milestone still gets a plan in `docs/`,
 verification and a commit.
@@ -74,6 +81,8 @@ verification and a commit.
    `HOME` instead** — macOS finds the login keychain through `HOME`.
    **`FLY_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a
    folder, so tests never put files in the user's real Trash.
+   Unpackaged runs keep app data in `…/Application Support/Fly (development)`
+   unless `--user-data-dir` is given; the installed app uses its own folder.
 7. **Keychain namespaces:** `Fly` (packaged), `Fly (development)` (`npm run dev`
    and smoke), `Fly (test <pid>)` (integration). Accounts are
    `connection/<uuid>/password|passphrase`.
@@ -212,6 +221,26 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   defaults to false (probed); it's now pinned, and `will-navigate` only allows
   the app's own URL (it used to allow every `file:` URL).
 
+## Testing gotchas added in M10
+
+- **Node won't let a process exit while a debugger is attached.** Quitting the
+  app via the main-process inspector hangs until the CDP session closes; smoke's
+  `app.quitFromMenu()` sends the quit, then detaches.
+- **The test image declares `VOLUME /config`**, and `docker rm -f` keeps
+  anonymous volumes: 107 of them (19 GB) had filled the Colima disk and made
+  uploads fail with `TRANSFER_FAILED`. Container removal always passes `-v`.
+- **`Runtime.evaluate` bypasses the page's CSP**, so `eval` "working" over CDP
+  proves nothing; check `securitypolicyviolation` events instead (the production
+  CSP header *does* apply to `file://` in Electron 44).
+- **npm installs only the host's optional native package**; cross-builds need
+  `scripts/prepare-native.mjs` first (`npm install --no-save --force …`). A later
+  `npm install` removes those extra packages again.
+- **electron-builder logs "signing with signtool.exe" on macOS even with no
+  certificate** — nothing is signed (PE certificate table is 0 bytes; checked by
+  `verify:package`).
+- **Very long `python3 - <<'PY'` heredocs have hung the shell** (no Python process
+  ever started); write the script to a file and run that instead.
+
 ## Commands
 
 ```bash
@@ -224,7 +253,8 @@ npm run smoke             # CDP (+ main-process inspector) end-to-end test on th
                           # exits 1 on any failed check — extend it as milestones land
                           # SMOKE_SCREENSHOT_DIR=<dir> also saves screenshots
 npm run test-server -- up # a local OpenSSH server for trying the app by hand (also: status, down)
-npm run build:mac         # package .dmg (arm64 + x64)
+npm run build:mac         # DMGs (arm64 + x64) → release/   (build:win → NSIS x64, build:linux → AppImage x64)
+npm run verify:package -- release/mac/Fly.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
 ```
 
 ## Architecture
@@ -355,7 +385,15 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   Operations are passed to `FilePane` as a per-side `PaneOperations` object.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
-  shipped app safer.
+  shipped app safer. Verified enforced in the packaged app (M10).
+- **Packaging (M10):** electron-builder, `npmRebuild: false` (ssh2 uses pure-JS
+  crypto; `@napi-rs/keyring` is prebuilt per platform), `asarUnpack: **/*.node`,
+  ssh2/cpu-features Node-ABI binaries excluded, per-platform keyring binaries
+  only. **macOS ad-hoc signed** (`identity: '-'`, hardened runtime, default
+  entitlements) — never a developer identity. **Fuses:** RunAsNode, NODE_OPTIONS
+  and `--inspect` off; asar integrity, only-load-from-asar, cookie encryption on.
+- **Quitting or closing the window with active transfers asks first**
+  (`app-lifecycle.ts`); confirming uses the settle-then-quit path.
 
 ## Working agreement (spec section 24)
 

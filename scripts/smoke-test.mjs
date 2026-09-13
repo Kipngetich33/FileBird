@@ -51,8 +51,10 @@ let userData
 let scratch
 
 // Data the smoke test must never write to.
-const realTrustStore = join(homedir(), 'Library', 'Application Support', 'fly', 'known-hosts.json')
-const realTrustBefore = await readFile(realTrustStore, 'utf8').catch(() => null)
+// The installed app's data folder, and the one unpackaged runs use without --user-data-dir.
+const realTrustStores = ['fly', 'Fly (development)'].map((folder) => join(homedir(), 'Library', 'Application Support', folder, 'known-hosts.json'))
+const readTrustStores = () => Promise.all(realTrustStores.map((path) => readFile(path, 'utf8').catch(() => null)))
+const realTrustBefore = JSON.stringify(await readTrustStores())
 
 /** Whether a Keychain item exists, by attributes only: reading its value from here would prompt. */
 async function keychainHas(account) {
@@ -288,6 +290,18 @@ async function launchApp() {
       await mkdir(SHOT_DIR, { recursive: true })
       const png = await send('Page.captureScreenshot', { format: 'png' })
       await writeFile(join(SHOT_DIR, `${name}.png`), Buffer.from(png.result.data, 'base64'))
+    },
+    /**
+     * Asks the app to quit from inside (like Cmd+Q), then detaches both CDP
+     * sessions: Node won't let a process exit while a debugger is attached.
+     * Resolves true if it exited within `ms`.
+     */
+    async quitFromMenu(ms) {
+      mainWs.send(JSON.stringify({ id: 999_999, method: 'Runtime.evaluate', params: { expression: `process.mainModule.require('electron').app.quit()` } }))
+      await sleep(100)
+      ws.close()
+      mainWs.close()
+      return Promise.race([exited.then(() => true), sleep(ms).then(() => false)])
     },
     /** Resolves true if the app exited by itself within 5 seconds of being asked to quit. */
     async close() {
@@ -592,8 +606,7 @@ try {
   )
   const passphraseAccount = `connection/${keyProfileId}/passphrase`
   record('storage: the passphrase is a Keychain item (checked by attributes only)', passphraseAccount, await keychainHas(passphraseAccount))
-  const realTrustAfter = await readFile(realTrustStore, 'utf8').catch(() => null)
-  record('storage: the real app data was not touched', '', realTrustAfter === realTrustBefore)
+  record('storage: the real app data (installed and development) was not touched', '', JSON.stringify(await readTrustStores()) === realTrustBefore)
 
   // ------------------------------------------------- browsing, then losing it ---
 
@@ -1342,6 +1355,50 @@ try {
   }
   record('UI delete: connections are removed after confirmation', '', await app.waitFor(`${textOf(PANE)}.includes('No saved connections yet')`))
   record('delete: the saved passphrase is removed from the Keychain', passphraseAccount, !(await keychainHas(passphraseAccount)))
+
+  // --------------------------------------- M10: asking before quitting with transfers ---
+
+  // The native dialog can't be clicked over CDP, so the main process's dialog is
+  // replaced through its inspector with one that records the question and answers.
+  await app.mainEval(`(() => {
+    const { dialog } = process.mainModule.require('electron')
+    globalThis.__questions = []
+    globalThis.__answer = 0
+    dialog.showMessageBox = async (...args) => {
+      globalThis.__questions.push(args.at(-1).message)
+      return { response: globalThis.__answer, checkboxChecked: false }
+    }
+    return true
+  })()`)
+  const probe = await app.js(`window.api.connections.connectUnsaved(${JSON.stringify({ name: 'quit test', host: server.host, port: server.port, username: server.username, auth: { type: 'password' } })}, { value: ${q(server.password)}, remember: false })`)
+  const live = probe?.status === 'host-key-unknown' ? await app.js(`window.api.sftp.trustHostKeyAndConnect(${q(probe.token)})`) : probe
+  await makeZeros(join(fixture, 'quit-test.bin'), 1024)
+  await app.js(`window.api.transfers.start(${JSON.stringify({ connectionId: live?.connection?.id, direction: 'upload', sourcePaths: [join(fixture, 'quit-test.bin')], destinationDirectory: '/config', onConflict: 'replace' })})`)
+  await app.waitFor(`window.api.transfers.list().then((jobs) => jobs.some((job) => job.status === 'running'))`, 10000)
+
+  await app.mainEval(`process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].close()`)
+  await sleep(800)
+  const closeKept = await app.js(`window.api.transfers.list().then((jobs) => jobs.some((job) => job.status === 'running'))`).catch(() => false)
+  await app.mainEval(`process.mainModule.require('electron').app.quit()`)
+  await sleep(800)
+  const quitKept = await app.js(`window.api.transfers.list().then((jobs) => jobs.some((job) => job.status === 'running'))`).catch(() => false)
+  const questions = await app.mainEval('JSON.stringify(globalThis.__questions)')
+  record(
+    'quit: with a transfer running, closing the window and quitting both ask first; Cancel keeps the app and the transfer',
+    { questions, closeKept, quitKept },
+    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit Fly and cancel 1 transfer?']) && closeKept && quitKept
+  )
+
+  await app.mainEval('globalThis.__answer = 1')
+  const quitStarted = Date.now()
+  const quitConfirmed = await app.quitFromMenu(8000)
+  const partials = (await server.exec('ls -A /config')).split('\n').filter((name) => name.includes('quit-test'))
+  record(
+    'quit: confirming cancels the transfer, removes its partial file and quits promptly',
+    { quitConfirmed, seconds: (Date.now() - quitStarted) / 1000, partials },
+    quitConfirmed && partials.length === 0
+  )
+  await rm(join(fixture, 'quit-test.bin'), { force: true })
 } catch (err) {
   record('FATAL', err.stack ?? err.message, false)
 } finally {

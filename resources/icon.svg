@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2433"/>
+      <stop offset="1" stop-color="#0b0f17"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#075985"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: an 824px rounded square centred on the 1024px canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#ground)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <!-- two panes, faint -->
+  <rect x="210" y="250" width="270" height="524" rx="36" fill="#ffffff" fill-opacity="0.05"/>
+  <rect x="544" y="250" width="270" height="524" rx="36" fill="#ffffff" fill-opacity="0.05"/>
+  <!-- the paper plane crossing from one pane to the other -->
+  <g transform="translate(512 512) rotate(-12) translate(-512 -512)">
+    <path d="M232 520 L800 300 L612 760 L512 590 Z" fill="url(#wing)"/>
+    <path d="M512 590 L800 300 L560 640 Z" fill="url(#fold)"/>
+    <path d="M512 590 L560 640 L520 700 Z" fill="#0c4a6e"/>
+  </g>
+</svg>

@@ -5,6 +5,40 @@ with Electron, React and TypeScript.
 
 Targets macOS (Apple Silicon first), Windows and Linux.
 
+## Installing
+
+Builds are produced locally with electron-builder (see [Packaging](#packaging)).
+They are **not signed with a developer certificate or notarised yet**, so each
+operating system warns the first time you open Fly.
+
+### macOS
+
+1. Open `Fly-<version>-mac-arm64.dmg` (Apple Silicon) or `Fly-<version>-mac-x64.dmg`
+   (Intel) and drag **Fly** to **Applications**.
+2. The first time, **right-click Fly in Applications → Open → Open**. macOS
+   blocks a double-click on an app from an unidentified developer. (If macOS says
+   the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/Fly.app`
+   once — the builds are ad-hoc signed only.)
+3. Saved passwords and passphrases go to your login Keychain, under **Fly**.
+
+### Windows
+
+Run `Fly-<version>-win-x64-setup.exe`. SmartScreen warns about an unrecognised
+app: choose **More info → Run anyway**. Credentials are stored in Windows
+Credential Manager. *(Windows builds are cross-built on macOS and not yet
+tested on Windows.)*
+
+### Linux
+
+```bash
+chmod +x Fly-<version>-linux-x86_64.AppImage
+./Fly-<version>-linux-x86_64.AppImage
+```
+
+Saving passwords needs a Secret Service provider (GNOME Keyring or KWallet)
+running. AppImages need FUSE (`libfuse2` on Ubuntu 22.04+). *(Linux builds are
+cross-built on macOS and not yet tested on Linux.)*
+
 ## Requirements
 
 - **Node.js 22.12 or newer** (Electron's installer needs `require(esm)`).
@@ -41,9 +75,31 @@ colima start fly --vm-type vz --cpu 2 --memory 2 --disk 20
 | `npm run test:integration` | Tests against a real OpenSSH server in a container (needs Colima) |
 | `npm run smoke` | End-to-end check: launches the built app and drives it over CDP (needs Colima) |
 | `npm run test-server -- up` | Start a local OpenSSH server to try the app by hand (`status`, `down`) |
-| `npm run build:mac` | Package a macOS `.dmg` (arm64 + x64) |
-| `npm run build:win` | Package a Windows NSIS installer |
-| `npm run build:linux` | Package a Linux AppImage |
+| `npm run build:mac` | Package macOS `.dmg`s (arm64 + x64) |
+| `npm run build:win` | Package a Windows NSIS installer (x64) |
+| `npm run build:linux` | Package a Linux AppImage (x64) |
+| `npm run verify:package` | Check a packaged macOS app and run it against a test server |
+
+## Packaging
+
+```bash
+npm run build:mac      # DMGs for Apple Silicon and Intel   → release/
+npm run build:win      # NSIS installer (x64)
+npm run build:linux    # AppImage (x64)
+npm run verify:package # checks a macOS build: signature, fuses, native modules,
+                       # then launches it against a test server (needs Colima)
+```
+
+- Each build script first fetches the keychain module's prebuilt binary for its
+  targets (`scripts/prepare-native.mjs`), so cross-builds carry the right one.
+- No native rebuild is needed: `ssh2` runs on pure JavaScript crypto under Electron.
+- Production hardening is applied at package time: Electron fuses (no
+  `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` or `--inspect`; asar integrity; app
+  loaded only from the asar) and a Content-Security-Policy.
+- macOS builds are **ad-hoc signed only**. Developer ID signing and notarisation
+  are not configured.
+- The icon is `resources/icon.svg`, rendered to `resources/icon.png` with
+  `env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron scripts/render-icon.cjs`.
 
 ## Architecture
 

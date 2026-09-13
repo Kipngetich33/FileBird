@@ -1,7 +1,8 @@
 {
   "name": "fly",
   "version": "0.1.0",
-  "description": "Fly — a cross-platform desktop SFTP client",
+  "description": "Fly \u2014 a cross-platform desktop SFTP client",
+  "desktopName": "fly.desktop",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
   "license": "MIT",
@@ -19,12 +20,13 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:win": "npm run build && electron-builder --win",
-    "build:linux": "npm run build && electron-builder --linux",
+    "build:mac": "npm run build && node scripts/prepare-native.mjs darwin && electron-builder --mac",
+    "build:win": "npm run build && node scripts/prepare-native.mjs win32 && electron-builder --win",
+    "build:linux": "npm run build && node scripts/prepare-native.mjs linux && electron-builder --linux",
     "build:unpack": "npm run build && electron-builder --dir",
     "smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/smoke-test.mjs",
-    "test-server": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-server.mjs"
+    "test-server": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-server.mjs",
+    "verify:package": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-package.mjs"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

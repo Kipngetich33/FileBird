@@ -269,6 +269,11 @@ export class TransferQueue {
     })
   }
 
+  /** Queued or running jobs, e.g. before quitting. */
+  activeCount(): number {
+    return this.queuedCount + this.running.size
+  }
+
   /** Resolves when nothing is queued or running (for tests and shutdown). */
   whenIdle(): Promise<void> {
     if (this.isIdle()) return Promise.resolve()

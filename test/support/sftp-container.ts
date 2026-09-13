@@ -86,6 +86,11 @@ export interface SftpServerOptions {
   tinyDiskBytes?: number
 }
 
+/**
+ * Removal always passes `-v`: the image declares `VOLUME /config`, so each
+ * container gets an anonymous volume that `docker rm -f` alone leaves behind
+ * (107 of them, 19 GB, had filled the VM's disk by Milestone 10).
+ */
 export async function startSftpServer(label: string, options: SftpServerOptions = {}): Promise<SftpTestServer> {
   await assertDockerAvailable()
 
@@ -114,7 +119,7 @@ export async function startSftpServer(label: string, options: SftpServerOptions 
     if (!Number.isInteger(port)) throw new Error(`Unexpected port mapping: ${mapping}`)
     await waitForSshBanner(port)
   } catch (error) {
-    await docker(['rm', '-f', name]).catch(() => undefined)
+    await docker(['rm', '-f', '-v', name]).catch(() => undefined)
     throw error
   }
 
@@ -219,7 +224,7 @@ export async function startSftpServer(label: string, options: SftpServerOptions 
       await docker(['unpause', name])
     },
     remove: async () => {
-      await docker(['rm', '-f', name]).catch(() => undefined)
+      await docker(['rm', '-f', '-v', name]).catch(() => undefined)
     }
   }
 }

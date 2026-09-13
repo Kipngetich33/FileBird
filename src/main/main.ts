@@ -3,6 +3,7 @@ import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC_EVENTS } from '../shared/constants/channels'
+import { developmentUserData, stopTransfersQuestion } from './app-lifecycle'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
 import { buildApplicationMenu } from './menu'
@@ -26,10 +27,21 @@ import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
 
 const isDev = !app.isPackaged
+
+// Before anything touches app data: unpackaged runs keep their own (plan D6).
+const developmentData = developmentUserData({
+  isPackaged: app.isPackaged,
+  hasUserDataSwitch: app.commandLine.hasSwitch('user-data-dir'),
+  appData: app.getPath('appData')
+})
+if (developmentData !== null) app.setPath('userData', developmentData)
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
 let connections: ConnectionService | null = null
 let transfers: TransferQueue | null = null
+/** Set once quitting is confirmed and cleanup has begun; later quit and close events pass through. */
+let readyToQuit = false
+let askingToQuit = false
 
 /**
  * The home folder Fly starts in and reads ~/.ssh/config from. Unpackaged builds
@@ -71,6 +83,21 @@ function createMainWindow(): BrowserWindow {
 
   // Avoid the white flash: hold the window back until React has painted.
   window.once('ready-to-show', () => window.show())
+
+  // Closing the window disconnects, so transfers still running would be cancelled: ask first.
+  let closeConfirmed = false
+  window.on('close', (event) => {
+    if (closeConfirmed || readyToQuit) return
+    const question = stopTransfersQuestion(transfers?.activeCount() ?? 0, 'close')
+    if (question === null) return
+    event.preventDefault()
+    void dialog.showMessageBox(window, question).then(async ({ response }) => {
+      if (response !== 1) return
+      closeConfirmed = true
+      await transfers?.cancelAll()
+      window.close()
+    })
+  })
 
   if (isDev && rendererUrl !== undefined) {
     guardNavigation(window, { origin: new URL(rendererUrl).origin })
@@ -187,16 +214,30 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-let readyToQuit = false
 app.on('before-quit', (event) => {
   if (readyToQuit) return
-  // Give cancelled transfers a moment to remove their temporary files before
-  // the connections close under them (bounded by the queue's settle timeout).
   event.preventDefault()
-  readyToQuit = true
-  void (transfers?.cancelAll() ?? Promise.resolve())
-    .then(() => connections?.disconnectAll())
+  if (askingToQuit) return
+
+  void (async () => {
+    // Transfers still running would be cancelled: ask first (plan D5).
+    const question = stopTransfersQuestion(transfers?.activeCount() ?? 0, 'quit')
+    if (question !== null) {
+      askingToQuit = true
+      const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+      const { response } = window === undefined ? await dialog.showMessageBox(question) : await dialog.showMessageBox(window, question)
+      askingToQuit = false
+      if (response !== 1) return
+    }
+    readyToQuit = true
+    // Give cancelled transfers a moment to remove their temporary files before
+    // the connections close under them (bounded by the queue's settle timeout).
+    await transfers?.cancelAll()
+    await connections?.disconnectAll()
+  })()
     // A later task, not a microtask: quitting again while Electron is still inside
     // the quit that was just prevented leaves the app running with no windows.
-    .finally(() => setTimeout(() => app.quit(), 0))
+    .finally(() => {
+      if (readyToQuit) setTimeout(() => app.quit(), 0)
+    })
 })

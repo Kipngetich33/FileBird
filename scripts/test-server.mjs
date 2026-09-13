@@ -64,7 +64,8 @@ switch (process.argv[2]) {
   }
   case 'down': {
     const names = (await docker(['ps', '-a', '--filter', `name=${PREFIX}`, '--format', '{{.Names}}'])).split('\n').filter(Boolean)
-    for (const name of names) await docker(['rm', '-f', name])
+    // -v: the image's /config volume would otherwise be left behind.
+    for (const name of names) await docker(['rm', '-f', '-v', name])
     console.log(names.length ? `Removed ${names.join(', ')}` : 'No test server was running.')
     break
   }

@@ -11,34 +11,73 @@ files:
   - package.json
   - '!**/{.eslintrc,.prettierrc,.editorconfig}'
   - '!**/{tsconfig*.json,electron.vite.config.ts}'
-  - '!{docs,src,release}/**'
+  - '!{docs,src,release,scripts,test}/**'
+  # Built for Node's ABI, so they can never load under Electron; ssh2 falls back
+  # to pure JS without them (measured in M6).
+  - '!node_modules/ssh2/lib/protocol/crypto/build/**'
+  - '!node_modules/cpu-features/build/**'
 
+# Native modules can't load from inside the asar archive.
 asarUnpack:
-  - resources/**
+  - '**/*.node'
+
+# No rebuild against Electron's headers (Milestone 10 plan D1): ssh2's optional
+# native crypto falls back to pure JS under Electron (measured in M6), and
+# @napi-rs/keyring ships prebuilt Node-API binaries per platform instead.
+# scripts/prepare-native.mjs fetches the target's keychain binary before a
+# cross-build.
+npmRebuild: false
+
+# Production hardening, flipped in the packaged binary (plan D3).
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  # The UI is loaded from file:// modules.
+  grantFileProtocolExtraPrivileges: true
 
 mac:
   category: public.app-category.utilities
+  # Each platform carries only its own keychain binaries (see prepare-native.mjs).
+  files:
+    - '!node_modules/@napi-rs/keyring-{win32,linux,freebsd}-*/**'
   target:
     - target: dmg
       arch: [arm64, x64]
-  # Hardened runtime is required for notarization later.
+  # Ad-hoc only (plan D2): no certificate, and never the user's signing
+  # identities. Apple Silicon needs at least this to launch the app.
+  # Developer ID signing and notarisation are a separate, explicit decision.
+  identity: '-'
   hardenedRuntime: true
   gatekeeperAssess: false
 
 dmg:
-  artifactName: ${productName}-${version}-${arch}.dmg
+  artifactName: ${productName}-${version}-mac-${arch}.dmg
 
 win:
+  files:
+    - '!node_modules/@napi-rs/keyring-{darwin,linux,freebsd}-*/**'
   target:
     - target: nsis
       arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 
 linux:
+  files:
+    - '!node_modules/@napi-rs/keyring-{darwin,win32,freebsd}-*/**'
   target:
-    - AppImage
+    - target: AppImage
+      arch: [x64]
   category: Utility
   maintainer: titansoft
+  # Lets desktop environments match the running window to the launcher entry.
+  syncDesktopName: true
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
