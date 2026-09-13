@@ -14,13 +14,14 @@ Targets macOS (primary), Windows, Linux.
 | `docs/MILESTONE-4-PLAN.md` | M4 plan: keychain storage, private keys, Connection Manager, `~/.ssh/config` import. |
 | `docs/MILESTONE-5-PLAN.md` | M5 plan: active pane, application menu, splitter, independence tests. |
 | `docs/MILESTONE-6-PLAN.md` | M6 plan: transfers — throughput research, safe writes, cancel, conflicts. |
-| `docs/MILESTONE-7-PLAN.md` | Latest milestone plan: transfer queue — planning, folders, concurrency, retry, multi-select. |
+| `docs/MILESTONE-7-PLAN.md` | M7 plan: transfer queue — planning, folders, concurrency, retry, multi-select. |
+| `docs/MILESTONE-8-PLAN.md` | Latest milestone plan: file operations — create folder, rename, delete (Trash locally), guard rails. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–7 ✅ done — runtime-verified and committed on `main`.**
+**Milestones 1–8 ✅ done — runtime-verified and committed on `main`.**
 
 Two independent panes (Local | Remote) with a resizable, remembered divider, an
 active pane (follows focus; Tab from a list switches), per-pane footers, and a
@@ -33,11 +34,14 @@ in main (conflicts asked once: Replace merges folders / Keep both / Skip), folde
 are created, and one job per file runs in a queue, 3 at a time, with safe writes
 (hidden temporary name → size check → atomic rename). Transfers panel: progress,
 speed, Cancel, Retry (rebinds to a reconnected server), Completed/Failed filters.
-Verified by `npm test` (319 unit), `npm run test:integration` (56: real OpenSSH,
-Keychain, `ssh`) and `npm run smoke` (93 checks driving the real app).
+File operations (M8): New Folder (toolbar, `Cmd/Ctrl+Shift+N`), Rename (`F2`), Delete
+(`Delete`, `Cmd+Backspace` on macOS) — local deletes go to the Trash, remote ones
+are permanent and never follow links; home, root and ancestors are refused in main.
+Verified by `npm test` (376 unit), `npm run test:integration` (62: real OpenSSH,
+Keychain, `ssh`) and `npm run smoke` (105 checks driving the real app).
 
-Next: **Milestone 8 (File Operations)** — §10, §14: create folder, rename, delete,
-locally and remotely; `Delete` / `F2`; the M7 multi-selection is the selection.
+Next: **Milestone 9 (Drag and Drop)** — §15: drag local → remote pane uploads,
+remote → local downloads, through the M7 queue.
 The user asked (2026-09-13) for M6–M10 to proceed without approval stops, using
 Claude's own recommendations; each milestone still gets a plan in `docs/`,
 verification and a commit.
@@ -63,6 +67,8 @@ verification and a commit.
 6. **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
    and reads `~/.ssh/config` from. The smoke test uses it; **never override
    `HOME` instead** — macOS finds the login keychain through `HOME`.
+   **`FLY_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a
+   folder, so tests never put files in the user's real Trash.
 7. **Keychain namespaces:** `Fly` (packaged), `Fly (development)` (`npm run dev`
    and smoke), `Fly (test <pid>)` (integration). Accounts are
    `connection/<uuid>/password|passphrase`.
@@ -177,6 +183,17 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 - **CDP mouse events take `modifiers`** (1 Alt, 2 Ctrl, 4 Meta, 8 Shift) — that is
   how smoke Cmd-clicks and Shift-clicks rows.
 
+## Testing gotchas added in M8
+
+- **`registerAccelerator: false` only works on Windows and Linux.** On macOS a
+  menu accelerator is always registered, so Delete… has none there (it would
+  take `Cmd+Backspace` from text fields); the focused file list handles the key.
+- **Keys typed in a dialog bubble to its React parent.** Pane dialogs render
+  outside the pane's `<section>`, or Backspace in a rename field would go up a folder.
+- **A mutation that changes nothing is not a test gap:** remote delete re-checks
+  `lstat` at every level, so dropping one `isSymlink` test changed no behaviour.
+  Mutate the realistic bug (`stat` instead of `lstat`) instead.
+
 ## Commands
 
 ```bash
@@ -203,7 +220,7 @@ Renderer (React, sandboxed)  ──contextBridge + IPC──>  Main (app logic, 
 src/
 ├── main/       main.ts · menu.ts · security.ts · logger.ts · errors.ts
 │   ├── ipc/        validated handlers (one file per area)
-│   ├── services/   local-files · connection (live connections) · connection-profiles · ssh-config-import
+│   ├── services/   local-files · connection (live connections) · connection-profiles · ssh-config-import · file-operations (+ protected-paths)
 │   ├── transfers/  queue (FIFO, 3 at a time, retry) · plan (conflicts, folder walk) · run-job (safe write) · sides (local/remote) · progress · names
 │   ├── sftp/       SftpProvider interface · ssh2 implementation · host-key trust store
 │   ├── ssh/        private-key reading/inspection · ~/.ssh/config scan + ssh -G resolution
@@ -254,6 +271,11 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   is overwritten unless the user chose Replace; Replace merges folders and never
   deletes anything or swaps a file for a folder. A destination that appears after
   queueing fails the job (`ALREADY_EXISTS`).
+- **Deletes are guarded in main:** never the filesystem root, the home folder
+  (local `appHome` / the connection's remote home) or any folder containing it;
+  remote deletes use `lstat` and never follow links; local deletes go to the
+  Trash with **no permanent-delete fallback**. Renames never replace an existing
+  item. Names are checked with `src/shared/names.ts` on both sides.
 - **Keep SFTP behind the `SftpProvider` abstraction** (spec section 7). Do not
   couple the app to one library.
 - Avoid `any`. Small, focused modules.
@@ -305,6 +327,9 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   connection to the same host/port/user. History is in memory (1,000 finished).
 - **Still no React Context (M7 revisit):** the queue is a `useTransferQueue` hook in
   `MainPage`, batching updates per animation frame; panes get props.
+- **File operations (M8) use small dialogs, not inline row editing, and there is
+  no context menu** (not in spec; the File menu and keys reach everything).
+  Operations are passed to `FilePane` as a per-side `PaneOperations` object.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer.

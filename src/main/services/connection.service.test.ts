@@ -76,6 +76,15 @@ class FakeProvider implements SftpProvider {
   mkdir(): Promise<'created' | 'exists'> {
     throw new Error('not used')
   }
+  lstat(): Promise<null> {
+    throw new Error('not used')
+  }
+  renameNoReplace(): Promise<void> {
+    throw new Error('not used')
+  }
+  removeDirectory(): Promise<void> {
+    throw new Error('not used')
+  }
   remove(): Promise<void> {
     throw new Error('not used')
   }

@@ -12,6 +12,8 @@ interface PaneHeaderProps {
   onBack: () => void
   onUp: () => void
   onRefresh: () => void
+  /** Absent when the pane can't create folders. */
+  onNewFolder?: () => void
   /** Pane-specific controls at the right end, such as Disconnect. */
   actions?: ReactNode
 }
@@ -27,6 +29,7 @@ export function PaneHeader({
   onBack,
   onUp,
   onRefresh,
+  onNewFolder,
   actions
 }: PaneHeaderProps): JSX.Element {
   return (
@@ -55,6 +58,11 @@ export function PaneHeader({
         <ToolbarButton label="Refresh" disabled={path === null} spinning={loading} onClick={onRefresh}>
           <path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3" />
         </ToolbarButton>
+        {onNewFolder !== undefined && (
+          <ToolbarButton label="New folder" disabled={path === null} onClick={onNewFolder}>
+            <path d="M2 4.5h4l1.5 1.5H14v6.5H2zM8 7.5v3.5M6.25 9.25h3.5" />
+          </ToolbarButton>
+        )}
       </div>
 
       {/* Truncates at the start, so the current folder's name stays visible: …/fixture/alpha */}

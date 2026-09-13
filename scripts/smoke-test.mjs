@@ -89,7 +89,7 @@ async function launchApp() {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     // FLY_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
-    env: { ...inherited, FLY_DEV_HOME: fixture }
+    env: { ...inherited, FLY_DEV_HOME: fixture, FLY_DEV_TRASH_DIR: join(scratch, 'trash') }
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
   child.stdout.on('data', (d) => mainLogs.push(d.toString()))
@@ -339,6 +339,7 @@ try {
       JSON.stringify({
         app: ['onMenuCommand'],
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
+        files: ['createFolder', 'delete', 'rename'],
         keys: ['inspect', 'pick'],
         local: ['getHomeDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
@@ -910,6 +911,148 @@ try {
   for (const name of ['q1.bin', 'q2.bin', 'q3.bin', 'q4.bin', 'r1.bin', 'r2.bin', 'r3.bin']) await rm(join(fixture, name))
   await app.clickMenu('command:focus-local')
   await app.clickMenu('command:refresh')
+
+  // ------------------------------------------------------------ M8: file operations ---
+
+  const NAME_INPUT = 'input[name="item-name"]'
+  const TRASH = join(scratch, 'trash')
+  const nameProblemText = textOf('[data-testid="name-problem"]')
+  const selectedIn = (scope) => `[...document.querySelectorAll(${q(`${scope} [aria-selected="true"]`)})].map((row) => row.dataset.path)`
+  const inputSelection = `(() => { const i = document.querySelector(${q(NAME_INPUT)}); return i ? i.value.slice(i.selectionStart, i.selectionEnd) : null })()`
+  const clickBox = async (selector) => {
+    const r = await app.js(box(selector))
+    await app.mouseClick(r.x + r.w / 2, r.y + r.h / 2)
+  }
+
+  record(
+    'menu: File › New Folder (CmdOrCtrl+Shift+N), Rename… (F2), Delete… (no registered accelerator, so text fields keep the key)',
+    { newFolder: byId['command:new-folder'], rename: byId['command:rename'], remove: byId['command:delete'] },
+    byId['command:new-folder']?.accelerator === 'CmdOrCtrl+Shift+N' && byId['command:rename']?.accelerator === 'F2' &&
+      byId['command:delete']?.parent === 'File' && !byId['command:delete']?.accelerator
+  )
+  await app.evaluate('files: a relative folder is INVALID_INPUT', codeFrom(`window.api.files.createFolder({ side: 'local' }, 'relative', 'x')`), (v) => v === 'INVALID_INPUT')
+  await app.evaluate('files: a name with "/" is INVALID_INPUT', codeFrom(`window.api.files.createFolder({ side: 'local' }, ${q(fixture)}, 'a/b')`), (v) => v === 'INVALID_INPUT')
+  await app.evaluate('files: an unknown side is INVALID_INPUT', codeFrom(`window.api.files.rename({ side: 'elsewhere' }, ${q(join(fixture, 'file2.txt'))}, 'x')`), (v) => v === 'INVALID_INPUT')
+  await app.evaluate('files: deleting the root is NOT_ALLOWED', codeFrom(`window.api.files.delete({ side: 'local' }, ['/'])`), (v) => v === 'NOT_ALLOWED')
+  await app.evaluate('files: deleting the home folder is NOT_ALLOWED', codeFrom(`window.api.files.delete({ side: 'local' }, [${q(fixture)}])`), (v) => v === 'NOT_ALLOWED')
+
+  // Local: New Folder from the toolbar, with the real mouse and real typing.
+  await app.clickMenu('command:focus-local')
+  await clickBox(`${LOCAL} button[aria-label="New folder"]`)
+  const nameAsked = await app.waitFor(exists(NAME_INPUT))
+  const preselectedNew = await app.js(inputSelection)
+  await app.type(NAME_INPUT, 'bad/name')
+  const inlineProblem = await app.waitFor(`${nameProblemText}.includes('"/"') && document.querySelector('#name-dialog')?.closest('[role="dialog"]').querySelector('button[type="submit"]').disabled`)
+  await app.type(NAME_INPUT, 'Made by smoke')
+  await app.mouseClickButton(DIALOG, 'Create')
+  const created = await app.waitFor(`!${exists(DIALOG)} && JSON.stringify(${selectedIn(LOCAL)}) === ${q(JSON.stringify([join(fixture, 'Made by smoke')]))}`, 10000)
+  record(
+    'UI local: New Folder asks for a name, explains a bad one as it is typed, creates the folder and selects it',
+    { nameAsked, preselectedNew, inlineProblem, created },
+    nameAsked && preselectedNew === 'untitled folder' && inlineProblem && created && (await stat(join(fixture, 'Made by smoke'))).isDirectory()
+  )
+
+  // Local: F2 renames, preselecting the name without its extension, and never replaces.
+  await writeFile(join(fixture, 'rename-me.txt'), 'rename me')
+  await app.clickMenu('command:refresh')
+  await selectRow(join(fixture, 'rename-me.txt'))
+  await app.press('F2', 'F2', 113)
+  await app.waitFor(exists(NAME_INPUT))
+  const preselectedRename = await app.js(inputSelection)
+  await app.type(NAME_INPUT, 'file2.txt')
+  await app.mouseClickButton(DIALOG, 'Rename')
+  const takenRefused = await app.waitFor(`${nameProblemText}.includes('already exists')`)
+  await app.type(NAME_INPUT, 'renamed.txt')
+  await app.mouseClickButton(DIALOG, 'Rename')
+  const renamed = await app.waitFor(`!${exists(DIALOG)} && ${exists(rowFor(join(fixture, 'renamed.txt')))} && !${exists(rowFor(join(fixture, 'rename-me.txt')))}`, 10000)
+  record(
+    'UI local: F2 renames in place, preselects the name without its extension, and refuses a taken name',
+    { preselectedRename, takenRefused, renamed },
+    preselectedRename === 'rename-me' && takenRefused && renamed &&
+      (await readFile(join(fixture, 'renamed.txt'), 'utf8')) === 'rename me' && (await readFile(join(fixture, 'file2.txt'), 'utf8')) === 'hello'
+  )
+
+  // Local: Delete moves the selection to the Trash after confirming.
+  await selectRow(join(fixture, 'Made by smoke'))
+  await selectRow(join(fixture, 'renamed.txt'), META)
+  await app.press('Delete', 'Delete', 46)
+  const trashAsked = await app.waitFor(`${textOf(DIALOG)}.includes('Move 2 items to the Trash?')`)
+  const trashFocus = await app.js(`document.activeElement?.textContent ?? ''`)
+  await app.screenshot('10-delete-local')
+  await app.mouseClickButton(DIALOG, 'Move to Trash')
+  const trashedGone = await app.waitFor(`!${exists(DIALOG)} && !${exists(rowFor(join(fixture, 'renamed.txt')))} && !${exists(rowFor(join(fixture, 'Made by smoke')))}`, 10000)
+  const inTrash = (await readdir(TRASH).catch(() => [])).sort()
+  record(
+    'UI local: Delete asks first (Cancel focused), then moves the items to the Trash rather than deleting them',
+    { trashAsked, trashFocus, trashedGone, inTrash },
+    trashAsked && trashFocus === 'Cancel' && trashedGone && inTrash.some((name) => name.startsWith('Made by smoke-')) && inTrash.some((name) => name.startsWith('renamed.txt-'))
+  )
+
+  // Remote: New Folder and Rename from the File menu.
+  await app.clickMenu('command:focus-remote')
+  await app.clickMenu('command:new-folder')
+  await app.waitFor(exists(NAME_INPUT))
+  await app.type(NAME_INPUT, 'remote folder')
+  await app.mouseClickButton(DIALOG, 'Create')
+  const remoteCreated = await app.waitFor(`!${exists(DIALOG)} && JSON.stringify(${selectedIn(REMOTE)}) === ${q(JSON.stringify(['/config/fixture/remote folder']))}`, 10000)
+  await app.clickMenu('command:rename')
+  await app.waitFor(exists(NAME_INPUT))
+  await app.type(NAME_INPUT, 'alpha')
+  await app.mouseClickButton(DIALOG, 'Rename')
+  const remoteTaken = await app.waitFor(`${nameProblemText}.includes('already exists')`, 10000)
+  await app.type(NAME_INPUT, 'renamed remote')
+  await app.mouseClickButton(DIALOG, 'Rename')
+  const remoteRenamed = await app.waitFor(`!${exists(DIALOG)} && ${exists(rowFor('/config/fixture/renamed remote'))}`, 10000)
+  record(
+    'UI remote: File › New Folder and File › Rename work on the server, and a taken name is refused',
+    { remoteCreated, remoteTaken, remoteRenamed },
+    remoteCreated && remoteTaken && remoteRenamed && (await server.exec("stat -c '%F' '/config/fixture/renamed remote'")) === 'directory' &&
+      (await server.exec("stat -c '%F' /config/fixture/alpha")) === 'directory'
+  )
+
+  // Remote: Cmd+Backspace permanently deletes a mixed selection; a link's target survives.
+  await server.exec(
+    "mkdir -p /config/fixture/doomed/inner && printf x > /config/fixture/doomed/inner/f.txt && printf y > /config/fixture/doomed-file.txt && ln -s /config/fixture/alpha /config/fixture/doomed-link && printf keep > /config/fixture/alpha/keep.txt && chown -R -h 1000:1000 /config/fixture"
+  )
+  await app.clickMenu('command:refresh')
+  await selectRow('/config/fixture/doomed')
+  await selectRow('/config/fixture/doomed-file.txt', META)
+  await selectRow('/config/fixture/doomed-link', META)
+  await selectRow('/config/fixture/renamed remote', META)
+  await app.press('Backspace', 'Backspace', 8, META)
+  const permanentAsked = await app.waitFor(`${textOf(DIALOG)}.includes('Permanently delete 4 items?') && ${textOf(DIALOG)}.includes("can't be undone")`)
+  await app.screenshot('11-delete-remote')
+  await app.mouseClickButton(DIALOG, 'Delete')
+  const remoteGone = await app.waitFor(['/config/fixture/doomed', '/config/fixture/doomed-file.txt', '/config/fixture/doomed-link', '/config/fixture/renamed remote'].map((path) => `!${exists(rowFor(path))}`).join(' && '), 15000)
+  const stillOnServer = (await server.exec('ls -A /config/fixture')).split('\n').filter((name) => name.startsWith('doomed') || name === 'renamed remote')
+  record(
+    'UI remote: Cmd+Backspace asks, then permanently deletes files, folders and links; a link to a folder is not followed',
+    { permanentAsked, remoteGone, stillOnServer, target: await server.exec('cat /config/fixture/alpha/keep.txt') },
+    permanentAsked && remoteGone && stillOnServer.length === 0 && (await server.exec('cat /config/fixture/alpha/keep.txt')) === 'keep'
+  )
+
+  // Remote: the home folder can't be deleted, even when selected from its parent.
+  await app.clickMenu('command:go-up')
+  await app.waitFor(`${pathOf(REMOTE)} === '/config'`)
+  await app.clickMenu('command:go-up')
+  await app.waitFor(`${pathOf(REMOTE)} === '/'`)
+  await selectRow('/config')
+  await app.press('Delete', 'Delete', 46)
+  await app.waitFor(exists(DIALOG))
+  await app.mouseClickButton(DIALOG, 'Delete')
+  const homeRefused = await app.waitFor(`${textOf(`${REMOTE} [data-testid="operation-message"]`)}.includes("won't delete")`, 10000)
+  record(
+    'UI remote: deleting the home folder is refused with an explanation, and nothing is deleted',
+    await app.js(textOf(`${REMOTE} [data-testid="operation-message"]`)),
+    homeRefused && (await server.exec('ls -A /config/fixture')).includes('alpha')
+  )
+  await app.mouseClickButton(`${REMOTE} [data-testid="operation-message"]`, 'Dismiss')
+  await app.doubleClick(rowFor('/config'))
+  await app.waitFor(`${pathOf(REMOTE)} === '/config'`)
+  await app.doubleClick(rowFor('/config/fixture'))
+  await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture'`)
+  await server.exec('rm -f /config/fixture/alpha/keep.txt')
+  await app.clickMenu('command:focus-local')
 
   if (SHOT_DIR) {
     await app.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 640, deviceScaleFactor: 0, mobile: false })

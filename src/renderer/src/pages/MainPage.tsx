@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import type { FileEntry } from '@shared/types/files'
 import type { TransferJob } from '@shared/types/transfers'
 import { FilePane } from '@renderer/components/FileManager/FilePane'
 import { RemotePane } from '@renderer/components/FileManager/RemotePane'
 import { TransferButton } from '@renderer/components/FileManager/TransferButton'
-import type { PaneHandle, PaneId } from '@renderer/components/FileManager/pane'
+import type { PaneHandle, PaneId, PaneOperations } from '@renderer/components/FileManager/pane'
 import { SplitLayout } from '@renderer/components/Layout/SplitLayout'
 import { StatusBar } from '@renderer/components/Layout/StatusBar'
 import { ConflictDialog } from '@renderer/components/Transfers/ConflictDialog'
@@ -13,11 +13,14 @@ import { useDirectory } from '@renderer/hooks/useDirectory'
 import type { RemoteConnectionState } from '@renderer/hooks/useRemoteConnection'
 import { useTransferQueue } from '@renderer/hooks/useTransferQueue'
 import { appService } from '@renderer/services/app.service'
+import { filesService } from '@renderer/services/files.service'
 import { localFilesService } from '@renderer/services/local-files.service'
 
 interface MainPageProps {
   runtimeLabel: string
   remote: RemoteConnectionState
+  /** This computer's platform, for local naming rules and the Trash's name. */
+  platform: string
 }
 
 /** Completed jobs arrive in bursts; the destination pane refreshes once they settle. */
@@ -28,8 +31,18 @@ const REFRESH_DEBOUNCE_MS = 400
  * pane is active, the one focus last entered, and menu commands act on it.
  * The transfer queue (Milestone 7) spans both panes, so it lives here too.
  */
-export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
+export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX.Element {
   const local = useDirectory(localFilesService)
+  const localOperations = useMemo<PaneOperations>(() => {
+    const target = { side: 'local' } as const
+    return {
+      platform,
+      trash: true,
+      createFolder: (parent, name) => filesService.createFolder(target, parent, name),
+      rename: (path, newName) => filesService.rename(target, path, newName),
+      remove: (paths) => filesService.remove(target, paths)
+    }
+  }, [platform])
   const [active, setActive] = useState<PaneId>('local')
   const localRef = useRef<PaneHandle>(null)
   const remoteRef = useRef<PaneHandle>(null)
@@ -119,6 +132,17 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
           case 'transfer':
             transferRef.current(activeRef.current, pane(activeRef.current)?.selectedEntries() ?? [])
             break
+          case 'new-folder':
+          case 'rename':
+          case 'delete': {
+            // One dialog at a time: a shortcut pressed while one is open does nothing.
+            if (document.querySelector('[role="dialog"]') !== null) break
+            const target = pane(activeRef.current)
+            if (command === 'new-folder') target?.newFolder()
+            else if (command === 'rename') target?.rename()
+            else target?.deleteSelection()
+            break
+          }
           case 'select-all': {
             // The menu owns Cmd+A, so text fields get their usual behaviour from here.
             const focused = document.activeElement
@@ -150,6 +174,7 @@ export function MainPage({ runtimeLabel, remote }: MainPageProps): JSX.Element {
               active={active === 'local'}
               onActivate={() => setActive('local')}
               onSwitchPane={() => remoteRef.current?.focus()}
+              operations={localOperations}
               actions={
                 <TransferButton
                   direction="upload"

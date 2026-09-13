@@ -23,6 +23,7 @@ export default function App(): JSX.Element {
       <TitleBar isMac={isMac} status={status} />
       <MainPage
         remote={remote}
+        platform={versions?.platform ?? (isMac ? 'darwin' : 'linux')}
         runtimeLabel={versions === null ? '—' : `Electron ${versions.electron} · Node ${versions.node}`}
       />
     </div>

@@ -105,6 +105,7 @@ focus it and use ←/→; double-click resets) — the position is remembered.
 | `Cmd+[` · `Cmd+↑` | Back · Parent folder (Go menu) |
 | Click · `Cmd`-click · `Shift`-click · `Shift+↑/↓` · `Cmd+A` | Select · add or remove · select a range · select all |
 | `Cmd+T` | Transfer the active pane's selection to the other pane's folder |
+| `Cmd+Shift+N` · `F2` · `Delete` (`Cmd+Backspace` on macOS) | New folder · Rename · Delete the selection |
 
 ## Transferring files
 
@@ -125,6 +126,18 @@ as they arrive. Folders are copied with everything inside them.
   so a failed or cancelled transfer never leaves a half-written file behind.
   Permissions and modification times are kept. Links to folders inside a folder
   being transferred are skipped (and reported).
+
+## Managing files
+
+Both panes can create folders (toolbar button or **File › New Folder**), rename
+(**F2**) and delete the selection (**Delete**, or **Cmd+Backspace** on macOS).
+
+- **Local deletes go to the Trash** (Recycle Bin on Windows), so they can be
+  restored. If the Trash isn't available, nothing is deleted.
+- **Remote deletes are permanent**, and Fly asks first. Folders are deleted with
+  their contents; a link is removed as a link, never followed.
+- Renaming never replaces an existing item, and Fly refuses to delete or rename
+  your home folder or any folder that contains it.
 
 ## Security notes
 

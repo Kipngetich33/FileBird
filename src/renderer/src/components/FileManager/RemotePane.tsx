@@ -14,9 +14,10 @@ import { useConnectionProfiles } from '@renderer/hooks/useConnectionProfiles'
 import { useDirectory, type DirectorySource } from '@renderer/hooks/useDirectory'
 import type { RemoteConnectionState } from '@renderer/hooks/useRemoteConnection'
 import { connectionsService } from '@renderer/services/connections.service'
+import { filesService } from '@renderer/services/files.service'
 import { sftpService } from '@renderer/services/sftp.service'
 import { FilePane } from './FilePane'
-import type { PaneHandle } from './pane'
+import type { PaneHandle, PaneOperations } from './pane'
 import { TransferButton } from './TransferButton'
 
 type View = { name: 'list' } | { name: 'new' } | { name: 'edit'; profile: ConnectionSummary }
@@ -75,6 +76,9 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
       currentPath: () => (connected ? (connectedPaneRef.current?.currentPath() ?? null) : null),
       selectedEntries: () => (connected ? (connectedPaneRef.current?.selectedEntries() ?? []) : []),
       selectAll: () => connectedPaneRef.current?.selectAll(),
+      newFolder: () => connectedPaneRef.current?.newFolder(),
+      rename: () => connectedPaneRef.current?.rename(),
+      deleteSelection: () => connectedPaneRef.current?.deleteSelection(),
       refreshIfShowing: (path) => connectedPaneRef.current?.refreshIfShowing(path)
     }),
     [connected, reload]
@@ -310,6 +314,16 @@ function ConnectedPane({
   )
   const directory = useDirectory(source)
   const where = connection.port === 22 ? connection.host : `${connection.host}:${connection.port}`
+  const operations = useMemo<PaneOperations>(() => {
+    const target = { side: 'remote', connectionId: connection.id } as const
+    return {
+      platform: 'linux',
+      trash: false,
+      createFolder: (parent, name) => filesService.createFolder(target, parent, name),
+      rename: (path, newName) => filesService.rename(target, path, newName),
+      remove: (paths) => filesService.remove(target, paths)
+    }
+  }, [connection])
 
   return (
     <FilePane
@@ -322,6 +336,7 @@ function ConnectedPane({
       directory={directory}
       notice={notice}
       onDismissNotice={onDismissNotice}
+      operations={operations}
       actions={
         <>
           <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />

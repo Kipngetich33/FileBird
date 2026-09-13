@@ -157,6 +157,11 @@ export class ConnectionService {
     return info === undefined ? null : { host: info.host, port: info.port, username: info.username }
   }
 
+  /** The remote home folder of a live connection, or null once it has closed. */
+  homeOf(connectionId: string): string | null {
+    return this.connections.get(connectionId)?.info.homePath ?? null
+  }
+
   /** A live connection to this server as this user, e.g. to retry transfers after reconnecting. */
   findLive(server: { host: string; port: number; username: string }): string | null {
     for (const { info } of this.connections.values()) {

@@ -20,18 +20,33 @@ export const menuItemId = (command: MenuCommand): string => `command:${command}`
  */
 export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuOptions): MenuItemConstructorOptions[] {
   const isMac = platform === 'darwin'
-  const command = (id: MenuCommand, label: string, accelerator: string): MenuItemConstructorOptions => ({
+  const command = (id: MenuCommand, label: string, accelerator: string, extra: MenuItemConstructorOptions = {}): MenuItemConstructorOptions => ({
     id: menuItemId(id),
     label,
     accelerator,
-    click: () => send(id)
+    click: () => send(id),
+    ...extra
   })
 
   const template: MenuItemConstructorOptions[] = []
   if (isMac) template.push({ role: 'appMenu' })
 
   template.push(
-    { label: 'File', submenu: [isMac ? { role: 'close' } : { role: 'quit' }] },
+    {
+      label: 'File',
+      submenu: [
+        command('new-folder', 'New Folder', 'CmdOrCtrl+Shift+N'),
+        command('rename', 'Rename…', 'F2'),
+        // The focused file list handles the key itself: as a menu accelerator it would
+        // take Delete / Cmd+Backspace away from text fields. Windows and Linux can show
+        // an accelerator without registering it; macOS can't, so there it isn't shown.
+        isMac
+          ? command('delete', 'Delete…', '', { accelerator: undefined })
+          : command('delete', 'Delete…', 'Delete', { registerAccelerator: false }),
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
     // Required: without these roles, Cmd+C / Cmd+V stop working in text fields on macOS.
     // Select All is a command instead: the role would swallow Cmd+A before a file
     // list could see it. The renderer selects text in a focused field, files elsewhere.

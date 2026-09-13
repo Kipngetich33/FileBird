@@ -32,6 +32,8 @@ export type AppErrorCode =
   | 'SSH_CONFIG_UNAVAILABLE'
   | 'TRANSFER_FAILED'
   | 'ALREADY_EXISTS'
+  | 'NOT_ALLOWED'
+  | 'TRASH_UNAVAILABLE'
   | 'DISK_FULL'
   | 'INTERNAL'
 

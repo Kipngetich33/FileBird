@@ -1,5 +1,5 @@
 /** Commands the application menu sends to the renderer, which applies them to the active pane. */
-export const MENU_COMMANDS = ['refresh', 'focus-local', 'focus-remote', 'go-back', 'go-up', 'transfer', 'select-all'] as const
+export const MENU_COMMANDS = ['refresh', 'focus-local', 'focus-remote', 'go-back', 'go-up', 'transfer', 'select-all', 'new-folder', 'rename', 'delete'] as const
 
 export type MenuCommand = (typeof MENU_COMMANDS)[number]
 

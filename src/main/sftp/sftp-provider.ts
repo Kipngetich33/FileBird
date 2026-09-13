@@ -54,6 +54,17 @@ export interface SftpProvider {
   remove(path: string): Promise<void>
   /** Creates a folder; 'exists' if a folder is already there. A file of that name is ALREADY_EXISTS. */
   mkdir(path: string): Promise<'created' | 'exists'>
+  /** Like stat, but describes a symbolic link itself. Null when nothing is there. */
+  lstat(path: string): Promise<LinkStat | null>
+  /** Renames without ever replacing: an existing `to` is ALREADY_EXISTS. */
+  renameNoReplace(from: string, to: string): Promise<void>
+  /** Removes an empty folder. */
+  removeDirectory(path: string): Promise<void>
+}
+
+export interface LinkStat {
+  kind: FileKind
+  isSymlink: boolean
 }
 
 export interface RemoteFileStat {

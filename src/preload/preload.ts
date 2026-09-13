@@ -9,6 +9,7 @@ import type {
   SecretEntry
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
+import type { DeleteOutcome, FileTarget } from '../shared/types/file-operations'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
 import type { StartTransferOutcome, StartTransferRequest, TransferJob, TransferQueueUpdate } from '../shared/types/transfers'
 import type { SystemVersions } from '../shared/types/system'
@@ -62,6 +63,13 @@ const api = {
       ipcRenderer.invoke(IPC.SSH_CONFIG_PREVIEW, options),
     import: (aliases: string[], options: { allowCommands: boolean }): Promise<ConnectionSummary[]> =>
       ipcRenderer.invoke(IPC.SSH_CONFIG_IMPORT, aliases, options)
+  },
+  files: {
+    createFolder: (target: FileTarget, parent: string, name: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.FILES_CREATE_FOLDER, target, parent, name),
+    rename: (target: FileTarget, path: string, newName: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.FILES_RENAME, target, path, newName),
+    delete: (target: FileTarget, paths: string[]): Promise<DeleteOutcome> => ipcRenderer.invoke(IPC.FILES_DELETE, target, paths)
   },
   transfers: {
     start: (request: StartTransferRequest): Promise<StartTransferOutcome> =>

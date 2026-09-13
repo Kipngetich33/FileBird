@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, Menu, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, shell, type OpenDialogOptions } from 'electron'
 import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { IPC_EVENTS } from '../shared/constants/channels'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
+import { registerFilesIpc } from './ipc/files.ipc'
 import { buildApplicationMenu } from './menu'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
 import { registerSftpIpc } from './ipc/sftp.ipc'
@@ -12,6 +13,8 @@ import { KeyringSecretStore } from './secrets/keyring-secret-store'
 import { keychainService } from './secrets/secret-store'
 import { ConnectionProfilesService } from './services/connection-profiles.service'
 import { ConnectionService } from './services/connection.service'
+import { FileOperationsService } from './services/file-operations.service'
+import { devTrash } from './services/dev-trash'
 import { SshConfigImportService } from './services/ssh-config-import.service'
 import { HostKeyStore } from './sftp/host-keys'
 import { Ssh2SftpProvider } from './sftp/ssh2-provider'
@@ -33,6 +36,13 @@ let transfers: TransferQueue | null = null
  * instead would also hide the macOS login keychain. Packaged builds ignore it.
  */
 const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FLY_DEV_HOME'] : homedir()
+
+/**
+ * Local deletes go to the system Trash. Unpackaged builds accept FLY_DEV_TRASH_DIR
+ * so tests never put files in the user's real Trash; packaged builds ignore it.
+ */
+const trashDirectory = !app.isPackaged ? process.env['FLY_DEV_TRASH_DIR'] : undefined
+const trash = trashDirectory ? devTrash(trashDirectory) : (path: string): Promise<void> => shell.trashItem(path)
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -140,6 +150,16 @@ void app.whenReady().then(() => {
     }
   })
   registerTransfersIpc(transfers)
+
+  registerFilesIpc(
+    new FileOperationsService({
+      localHome: appHome,
+      platform: process.platform,
+      trash,
+      providerFor: (connectionId) => liveConnections.providerFor(connectionId),
+      remoteHomeOf: (connectionId) => liveConnections.homeOf(connectionId)
+    })
+  )
 
   createMainWindow()
 

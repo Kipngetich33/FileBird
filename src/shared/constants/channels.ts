@@ -30,7 +30,10 @@ export const IPC = {
   TRANSFERS_RETRY: 'transfers:retry',
   TRANSFERS_RETRY_FAILED: 'transfers:retry-failed',
   TRANSFERS_CLEAR_FINISHED: 'transfers:clear-finished',
-  TRANSFERS_LIST: 'transfers:list'
+  TRANSFERS_LIST: 'transfers:list',
+  FILES_CREATE_FOLDER: 'files:create-folder',
+  FILES_RENAME: 'files:rename',
+  FILES_DELETE: 'files:delete'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

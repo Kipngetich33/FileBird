@@ -24,6 +24,7 @@ import {
 } from './sftp-errors'
 import {
   TransferCancelled,
+  type LinkStat,
   type RemoteFileStat,
   type SftpConnectOptions,
   type SftpProvider,
@@ -343,6 +344,43 @@ export class Ssh2SftpProvider implements SftpProvider {
       if (existing !== null) throw new AppError('ALREADY_EXISTS', 'A file with this name already exists on the server.')
       throw this.toRequestError(error)
     }
+  }
+
+  async lstat(path: string): Promise<LinkStat | null> {
+    const sftp = this.requireSession()
+    try {
+      const stats = await new Promise<Stats>((resolve, reject) => {
+        sftp.lstat(path, (error, result) => (error !== undefined ? reject(error) : resolve(result)))
+      })
+      const isSymlink = stats.isSymbolicLink()
+      return { kind: stats.isDirectory() ? 'directory' : stats.isFile() ? 'file' : 'other', isSymlink }
+    } catch (error) {
+      if (sftpStatusOf(error) === SFTP_STATUS.NO_SUCH_FILE) return null
+      throw this.toRequestError(error)
+    }
+  }
+
+  async renameNoReplace(from: string, to: string): Promise<void> {
+    const sftp = this.requireSession()
+    if ((await this.lstat(to)) !== null) throw new AppError('ALREADY_EXISTS', 'An item with this name already exists here.')
+    try {
+      // Plain SFTP rename refuses an existing target (unlike posix-rename, used for transfers).
+      await new Promise<void>((resolve, reject) => {
+        sftp.rename(from, to, (error) => (error ? reject(error) : resolve()))
+      })
+    } catch (error) {
+      if (sftpStatusOf(error) === SFTP_FAILURE && (await this.lstat(to)) !== null) {
+        throw new AppError('ALREADY_EXISTS', 'An item with this name already exists here.')
+      }
+      throw this.toRequestError(error)
+    }
+  }
+
+  removeDirectory(path: string): Promise<void> {
+    const sftp = this.requireSession()
+    return new Promise((resolve, reject) => {
+      sftp.rmdir(path, (error) => (error ? reject(this.toRequestError(error)) : resolve()))
+    })
   }
 
   remove(path: string): Promise<void> {

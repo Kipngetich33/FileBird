@@ -62,9 +62,9 @@ describe('buildApplicationMenu', () => {
   })
 
   it.each([
-    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }],
-    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }],
-    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A' }]
+    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: undefined }],
+    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete' }],
+    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete' }]
   ] as const)('uses platform-appropriate shortcuts on %s', (platform, expected) => {
     const template = buildApplicationMenu({ platform, isDev: false, send: () => undefined })
     const accelerators = Object.fromEntries(
@@ -73,6 +73,18 @@ describe('buildApplicationMenu', () => {
         .map(({ item }) => [item.id?.slice('command:'.length), item.accelerator])
     )
     expect(accelerators).toEqual(expected)
+  })
+})
+
+describe('file operation items', () => {
+  it.each(PLATFORMS)('never registers the Delete shortcut as a menu accelerator on %s, so text fields keep the key', (platform) => {
+    const items = flatten(buildApplicationMenu({ platform, isDev: false, send: () => undefined }))
+    const remove = items.find(({ item }) => item.id === menuItemId('delete'))
+    expect(remove?.parent).toBe('File')
+    // registerAccelerator: false only works on Windows and Linux; macOS gets no accelerator at all.
+    if (platform === 'darwin') expect(remove?.item.accelerator).toBeUndefined()
+    else expect(remove?.item.registerAccelerator).toBe(false)
+    expect(items.find(({ item }) => item.id === menuItemId('new-folder'))?.item.registerAccelerator).toBeUndefined()
   })
 })
 
