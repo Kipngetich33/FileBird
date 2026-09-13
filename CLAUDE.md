@@ -12,26 +12,32 @@ Targets macOS (primary), Windows, Linux.
 | `docs/README.md` | Milestone tracker + superseded decisions. |
 | `docs/MILESTONE-3-PLAN.md` | M3 plan: SSH library evaluation, host-key trust, error model, test server. |
 | `docs/MILESTONE-4-PLAN.md` | M4 plan: keychain storage, private keys, Connection Manager, `~/.ssh/config` import. |
-| `docs/MILESTONE-5-PLAN.md` | Latest milestone plan: active pane, application menu, splitter, independence tests. |
+| `docs/MILESTONE-5-PLAN.md` | M5 plan: active pane, application menu, splitter, independence tests. |
+| `docs/MILESTONE-6-PLAN.md` | Latest milestone plan: transfers — throughput research, safe writes, cancel, conflicts. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–5 ✅ done — runtime-verified and committed on `main`.**
+**Milestones 1–6 ✅ done — runtime-verified and committed on `main`.**
 
 Two independent panes (Local | Remote) with a resizable, remembered divider, an
 active pane (follows focus; Tab from a list switches), per-pane footers, and a
 real application menu (Refresh `Cmd+R`, Focus panes `Cmd+1/2`, Go Back `Cmd+[`,
 Parent `Cmd+↑`) that replaces Electron's default. Remote side: saved connections,
 password or key login, secrets in the OS keychain, `~/.ssh/config` import,
-host keys trusted on first use. Verified by `npm test` (263 unit),
-`npm run test:integration` (36: real OpenSSH, Keychain, `ssh`) and
-`npm run smoke` (70 checks driving the real app).
+host keys trusted on first use. Transfers (M6): upload or download the selected
+file (toolbar button or `Cmd+T`), one at a time, with a progress bar, speed,
+Cancel, a Replace / Keep both / Cancel conflict dialog, and safe writes (hidden
+temporary name → size check → atomic rename; permissions and mtime kept).
+Verified by `npm test` (296 unit), `npm run test:integration` (52: real OpenSSH,
+Keychain, `ssh`) and `npm run smoke` (85 checks driving the real app).
 
-Next: **Milestone 6 (Transfers)** — not started. Plan it before writing code:
-upload/download with progress over IPC (§11–12), SFTP streams (not rsync), and
-the deferred native-crypto throughput measurement (MILESTONE-3-PLAN.md D2).
+Next: **Milestone 7 (Transfer Queue)** — §13: queued/running/completed/failed/
+cancelled, 2–3 concurrent, retry, history; plus folders and multi-selection
+(deferred from M6). The user asked (2026-09-13) for M6–M10 to proceed without
+approval stops, using Claude's own recommendations; each milestone still gets a
+plan in `docs/`, verification and a commit.
 
 ## Environment constraints — do not "fix" these
 
@@ -129,6 +135,26 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   `editMenu` role or copy/paste breaks in text fields on macOS.
 - **CDP `Tab` does perform real focus traversal**, so Tab behaviour is testable.
 
+## Testing gotchas added in M6
+
+- **`ssh2`'s `fastGet`/`fastPut` never call back if the connection drops**: their
+  error path waits for the server to confirm closing the remote handle over the
+  dead channel. `withTransferChannel` races the work against the channel's
+  `close` event (integration-tested, mutation-checked: without it the test hangs).
+- **A relaunched Electron window is often not focused** (macOS doesn't activate
+  an app launched from a background process, and `app.focus({ steal })` from it
+  doesn't help). Unfocused, Chromium moves `activeElement` but fires no
+  focus events, so anything driven by `onFocus` silently stops. The smoke test
+  and dev checks call CDP `Emulation.setFocusEmulationEnabled`.
+- **Backslashes vanish inside the smoke test's template-literal expressions**
+  (`\/` becomes `/`), which turned a regex into a ReferenceError that `waitFor`
+  swallowed. Prefer `.includes()` / `.endsWith()` there.
+- **The Write tool turns a `\u0000` escape into a literal NUL byte**, and Bash
+  refuses commands containing control characters. Build such strings with
+  `String.fromCharCode(0)`.
+- **Plain SFTP `rename` onto an existing file fails** (status 4) on OpenSSH; use
+  `ext_openssh_rename` (`posix-rename@openssh.com`).
+
 ## Commands
 
 ```bash
@@ -156,6 +182,7 @@ src/
 ├── main/       main.ts · menu.ts · security.ts · logger.ts · errors.ts
 │   ├── ipc/        validated handlers (one file per area)
 │   ├── services/   local-files · connection (live connections) · connection-profiles · ssh-config-import
+│   ├── transfers/  TransferService (one at a time) · progress throttle · transfer names
 │   ├── sftp/       SftpProvider interface · ssh2 implementation · host-key trust store
 │   ├── ssh/        private-key reading/inspection · ~/.ssh/config scan + ssh -G resolution
 │   ├── secrets/    SecretStore interface · OS keychain implementation (@napi-rs/keyring)
@@ -197,6 +224,12 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Host keys are always verified.** Unknown keys are refused during the
   handshake and only trusted after the user confirms; a changed key is a hard
   stop with no "connect anyway". Never pass a `hostVerifier` that returns `true`.
+- **Transfers never leave a partial file under the real name**: write to
+  `.<name>.fly-part-<hex>` in the destination folder, check the size, then rename
+  (remote: `posix-rename`). A failed or cancelled transfer removes its temporary
+  file (best effort — impossible remotely once the connection is gone). Existing
+  destinations are never overwritten without the user choosing Replace, and a
+  folder is never replaced by a file.
 - **Keep SFTP behind the `SftpProvider` abstraction** (spec section 7). Do not
   couple the app to one library.
 - Avoid `any`. Small, focused modules.
@@ -235,6 +268,13 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   M7 (the transfer queue spans both panes).
 - **Divider position lives in renderer `localStorage`** (`fly.layout.v1`) until a
   settings file exists.
+- **Transfers use `fastGet`/`fastPut`** (64 parallel 32 KB requests; 2–2.5× plain
+  streams) **on a dedicated SFTP channel per transfer**; Cancel ends that channel.
+  **No native crypto rebuild:** measured 70–87 MB/s either way through the port
+  forward, matching OpenSSH; `aes128-gcm` runs 550+ MB/s in Electron's fallback.
+  ChaCha20-only servers would fail (BoringSSL lacks it) — accepted.
+- **One transfer at a time in M6** (`TRANSFER_BUSY`); files only — folders and
+  multi-select arrive with the M7 queue. Conflicts default to asking.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer.

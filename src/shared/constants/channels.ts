@@ -23,7 +23,9 @@ export const IPC = {
   KEYS_PICK: 'keys:pick',
   KEYS_INSPECT: 'keys:inspect',
   SSH_CONFIG_PREVIEW: 'ssh-config:preview',
-  SSH_CONFIG_IMPORT: 'ssh-config:import'
+  SSH_CONFIG_IMPORT: 'ssh-config:import',
+  TRANSFERS_START: 'transfers:start',
+  TRANSFERS_CANCEL: 'transfers:cancel'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -34,5 +36,6 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC]
  */
 export const IPC_EVENTS = {
   SFTP_CONNECTION_CLOSED: 'sftp:connection-closed',
-  MENU_COMMAND: 'app:menu-command'
+  MENU_COMMAND: 'app:menu-command',
+  TRANSFER_UPDATE: 'transfers:update'
 } as const

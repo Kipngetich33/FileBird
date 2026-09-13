@@ -9,7 +9,7 @@ import {
   type Stats
 } from 'ssh2'
 import type { FileEntry } from '../../shared/types/files'
-import type { AppError } from '../errors'
+import { AppError, errnoOf } from '../errors'
 import { createLogger } from '../logger'
 import { mapLimit } from '../utils/map-limit'
 import { toRemoteEntry } from './remote-entries'
@@ -22,7 +22,15 @@ import {
   notConnected,
   sftpStatusOf
 } from './sftp-errors'
-import type { SftpConnectOptions, SftpProvider, SftpTimeouts } from './sftp-provider'
+import {
+  TransferCancelled,
+  type RemoteFileStat,
+  type SftpConnectOptions,
+  type SftpProvider,
+  type SftpTimeouts,
+  type TransferOptions,
+  type UploadOptions
+} from './sftp-provider'
 
 const log = createLogger('sftp')
 
@@ -37,6 +45,16 @@ const STAT_CONCURRENCY = 16
 
 /** How long a polite disconnect may take before the socket is torn down. */
 const DISCONNECT_GRACE_MS = 3_000
+
+/** Parallel chunk requests per transfer: measured 2–2.5× faster than streams (M6 plan D2). */
+const TRANSFER_CONCURRENCY = 64
+const TRANSFER_CHUNK_BYTES = 32_768
+
+/** SFTP_FX_FAILURE: the server's catch-all, e.g. a full disk or a read-only file system. */
+const SFTP_FAILURE = 4
+
+/** How long to wait, after a transfer error, for the connection to report that it closed. */
+const CLOSE_SETTLE_MS = 1_000
 
 type SshError = Error & ClientErrorExtensions
 
@@ -226,6 +244,186 @@ export class Ssh2SftpProvider implements SftpProvider {
   private emitUnexpectedClose(): void {
     const error = connectionLost()
     for (const listener of this.closeListeners.splice(0)) listener(error)
+  }
+
+  async stat(path: string): Promise<RemoteFileStat | null> {
+    const sftp = this.requireSession()
+    try {
+      const stats = await new Promise<Stats>((resolve, reject) => {
+        sftp.stat(path, (error, result) => (error !== undefined ? reject(error) : resolve(result)))
+      })
+      return {
+        kind: stats.isDirectory() ? 'directory' : stats.isFile() ? 'file' : 'other',
+        size: stats.size,
+        modifiedAt: typeof stats.mtime === 'number' ? stats.mtime * 1000 : null,
+        mode: typeof stats.mode === 'number' ? stats.mode & 0o7777 : null
+      }
+    } catch (error) {
+      if (sftpStatusOf(error) === SFTP_STATUS.NO_SUCH_FILE) return null
+      throw this.toRequestError(error)
+    }
+  }
+
+  upload(localPath: string, remotePath: string, { signal, onProgress, mode, modifiedAt }: UploadOptions): Promise<void> {
+    return this.withTransferChannel('upload', signal, async (channel) => {
+      await new Promise<void>((resolve, reject) => {
+        channel.fastPut(
+          localPath,
+          remotePath,
+          {
+            concurrency: TRANSFER_CONCURRENCY,
+            chunkSize: TRANSFER_CHUNK_BYTES,
+            mode: mode & 0o777,
+            step: (transferred, _chunk, total) => onProgress(transferred, total)
+          },
+          (error) => (error ? reject(error) : resolve())
+        )
+      })
+      if (modifiedAt !== null) {
+        const seconds = Math.floor(modifiedAt / 1000)
+        await new Promise<void>((resolve, reject) => {
+          channel.utimes(remotePath, seconds, seconds, (error) => (error ? reject(error) : resolve()))
+        })
+      }
+    })
+  }
+
+  download(remotePath: string, localPath: string, { signal, onProgress }: TransferOptions): Promise<void> {
+    return this.withTransferChannel('download', signal, (channel) =>
+      new Promise<void>((resolve, reject) => {
+        channel.fastGet(
+          remotePath,
+          localPath,
+          {
+            concurrency: TRANSFER_CONCURRENCY,
+            chunkSize: TRANSFER_CHUNK_BYTES,
+            step: (transferred, _chunk, total) => onProgress(transferred, total)
+          },
+          (error) => (error ? reject(error) : resolve())
+        )
+      })
+    )
+  }
+
+  async rename(from: string, to: string): Promise<void> {
+    const sftp = this.requireSession()
+    const call = (fn: (cb: (error?: Error | null) => void) => void): Promise<void> =>
+      new Promise((resolve, reject) => fn((error) => (error ? reject(error) : resolve())))
+    try {
+      // posix-rename replaces the target atomically; plain SFTP rename refuses an existing target.
+      await call((cb) => sftp.ext_openssh_rename(from, to, cb))
+    } catch (error) {
+      if (!(error instanceof Error) || !/not support/i.test(error.message)) throw this.toRequestError(error)
+      try {
+        await call((cb) => sftp.rename(from, to, cb))
+      } catch (renameError) {
+        if (sftpStatusOf(renameError) !== SFTP_FAILURE || (await this.stat(to)) === null) throw this.toRequestError(renameError)
+        // No atomic rename on this server: replace in two steps (only reached after the user chose Replace).
+        await call((cb) => sftp.unlink(to, cb)).catch((unlinkError: unknown) => {
+          throw this.toRequestError(unlinkError)
+        })
+        await call((cb) => sftp.rename(from, to, cb)).catch((retryError: unknown) => {
+          throw this.toRequestError(retryError)
+        })
+      }
+    }
+  }
+
+  remove(path: string): Promise<void> {
+    const sftp = this.requireSession()
+    return new Promise((resolve, reject) => {
+      sftp.unlink(path, (error) => (error ? reject(this.toRequestError(error)) : resolve()))
+    })
+  }
+
+  /**
+   * Each transfer gets its own SFTP channel on the connection. Cancelling ends
+   * only that channel (fastGet/fastPut have no abort of their own), and a large
+   * transfer's parallel requests stay off the channel used for browsing.
+   */
+  private async withTransferChannel(
+    direction: 'upload' | 'download',
+    signal: AbortSignal,
+    work: (channel: SFTPWrapper) => Promise<void>
+  ): Promise<void> {
+    const client = this.client
+    if (client === null || this.sftp === null) throw notConnected()
+    if (signal.aborted) throw new TransferCancelled()
+
+    let channel: SFTPWrapper
+    try {
+      channel = await new Promise<SFTPWrapper>((resolve, reject) => {
+        client.sftp((error, opened) => (error !== undefined ? reject(error) : resolve(opened)))
+      })
+    } catch (error) {
+      throw await this.toTransferError(error, direction, signal)
+    }
+
+    // A channel that fails later must never become an unhandled 'error' event.
+    channel.on('error', (error: Error) => log.debug('Transfer channel error', { message: error.message }))
+    const abort = (): void => channel.end()
+    signal.addEventListener('abort', abort, { once: true })
+    // When the connection drops, fastGet/fastPut never call back: their error
+    // path waits for the server to confirm closing the remote handle over the
+    // dead channel. The channel's own 'close' is the reliable signal.
+    const closed = new Promise<never>((_resolve, reject) => {
+      channel.once('close', () => reject(new Error('The transfer channel closed')))
+    })
+    closed.catch(() => undefined)
+    try {
+      await Promise.race([work(channel), closed])
+    } catch (error) {
+      throw await this.toTransferError(error, direction, signal)
+    } finally {
+      signal.removeEventListener('abort', abort)
+      channel.end()
+    }
+  }
+
+  private async toTransferError(error: unknown, direction: 'upload' | 'download', signal: AbortSignal): Promise<unknown> {
+    if (signal.aborted) return new TransferCancelled()
+    if (error instanceof AppError) return error
+
+    // When the server drops the session, the transfer usually fails a moment
+    // before the connection reports closing; give it a chance to catch up.
+    const deadline = Date.now() + CLOSE_SETTLE_MS
+    while (this.sftp !== null && Date.now() < deadline && sftpStatusOf(error) === undefined && errnoOf(error) !== 'ENOSPC') {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    if (this.sftp === null) return this.endRequested ? notConnected() : connectionLost()
+
+    switch (errnoOf(error)) {
+      case 'ENOSPC':
+        return new AppError('DISK_FULL', "There isn't enough space on this computer for this file.")
+      case 'EACCES':
+      case 'EPERM':
+        return new AppError(
+          'PERMISSION_DENIED',
+          direction === 'download' ? "You don't have permission to write to this folder." : "You don't have permission to read this file."
+        )
+      case 'ENOENT':
+        return new AppError('NOT_FOUND', 'The file or folder no longer exists.')
+    }
+
+    switch (sftpStatusOf(error)) {
+      case SFTP_STATUS.NO_SUCH_FILE:
+        return new AppError('NOT_FOUND', 'The file or folder no longer exists on the server.')
+      case SFTP_STATUS.PERMISSION_DENIED:
+        return new AppError(
+          'PERMISSION_DENIED',
+          direction === 'upload'
+            ? "You don't have permission to write to this folder on the server."
+            : "You don't have permission to read this file on the server."
+        )
+      case SFTP_FAILURE:
+        return new AppError(
+          'TRANSFER_FAILED',
+          direction === 'upload'
+            ? "The server couldn't save the file. It may be full or read-only."
+            : "The server couldn't send the file."
+        )
+    }
+    return error
   }
 
   private requireSession(): SFTPWrapper {

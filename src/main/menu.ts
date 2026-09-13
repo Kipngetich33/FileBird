@@ -51,6 +51,10 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
         command('go-back', 'Back', isMac ? 'Cmd+[' : 'Alt+Left'),
         command('go-up', 'Parent Folder', isMac ? 'Cmd+Up' : 'Alt+Up')
       ]
+    },
+    {
+      label: 'Transfer',
+      submenu: [command('transfer', 'Transfer to Other Pane', 'CmdOrCtrl+T')]
     }
   )
 

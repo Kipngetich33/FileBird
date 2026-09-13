@@ -10,7 +10,8 @@
 // The app runs with a throwaway --user-data-dir, so the real app data is never
 // touched, and it is restarted once to prove secrets persist in the keychain.
 import { execFile, spawn } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -25,6 +26,7 @@ const SHOT_DIR = process.env.SMOKE_SCREENSHOT_DIR
 const KEYCHAIN_SERVICE = 'Fly (development)'
 const ELECTRON = './node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sha256 = (data) => createHash('sha256').update(data).digest('hex')
 const q = (value) => JSON.stringify(value)
 
 const EXPECTED_LOCAL = ['.ssh', 'alpha', 'link-to-alpha', 'locked', '.hidden', 'broken-link', 'file2.txt', 'file10.txt']
@@ -156,6 +158,11 @@ async function launchApp() {
     if (details) throw new Error(`renderer threw: ${JSON.stringify(details).slice(0, 300)}`)
     return res.result?.result?.value
   }
+
+  // Focus events fire only in a focused page, and macOS does not always
+  // activate an app launched from a background process (the relaunch often
+  // isn't, and it can't take focus itself), so have the page act focused.
+  await send('Emulation.setFocusEmulationEnabled', { enabled: true })
 
   const self = {
     send,
@@ -317,7 +324,8 @@ try {
         local: ['getHomeDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
         sshConfig: ['import', 'preview'],
-        system: ['getVersion']
+        system: ['getVersion'],
+        transfers: ['cancel', 'onUpdate', 'start']
       })
   )
   await app.evaluate('node hidden', `[window.require, window.process, window.module].every(v => v === undefined)`, (v) => v === true)
@@ -605,6 +613,148 @@ try {
       return d.local === 'alpha · Folder' && d.remote === 'file2.txt · 5 bytes' && d.remoteCount === `${EXPECTED_REMOTE.length} items`
     }
   )
+
+  // ------------------------------------------------------------ M6: transfers ---
+
+  const BAR = '[data-testid="transfer-bar"]'
+  const UPLOAD_BUTTON = '[data-testid="upload-button"]'
+  const barStatus = `document.querySelector(${q(BAR)})?.dataset.status`
+  const barId = `document.querySelector(${q(BAR)})?.dataset.transferId`
+  /** Waits for a transfer other than `previousId` to reach `status`. */
+  const transferReached = async (status, previousId, timeoutMs = 30000) =>
+    app.waitFor(`${barStatus} === ${q(status)} && ${barId} !== ${q(previousId ?? '')}`, timeoutMs)
+  const selectRow = async (path) => {
+    await app.waitFor(exists(rowFor(path)), 10000)
+    await app.js(`document.querySelector(${q(rowFor(path))}).scrollIntoView({ block: 'center' }); document.querySelector(${q(rowFor(path))}).click()`)
+  }
+  const FAKE_ID = '5b7c1f7e-7a51-4a5f-9a43-3f1d8c2b9e10'
+
+  record('menu: Transfer › Transfer to Other Pane is CmdOrCtrl+T', byId['command:transfer'], byId['command:transfer']?.accelerator === 'CmdOrCtrl+T' && byId['command:transfer']?.parent === 'Transfer')
+  await app.evaluate(
+    'transfers: a malformed request is INVALID_INPUT',
+    codeFrom(`window.api.transfers.start({ connectionId: 'nope', direction: 'upload', sourcePath: '/x', destinationDirectory: '/y', onConflict: 'ask' })`),
+    (v) => v === 'INVALID_INPUT'
+  )
+  await app.evaluate(
+    'transfers: a relative local path is INVALID_INPUT',
+    codeFrom(`window.api.transfers.start({ connectionId: ${q(FAKE_ID)}, direction: 'download', sourcePath: '/config/fixture/file2.txt', destinationDirectory: 'Downloads', onConflict: 'ask' })`),
+    (v) => v === 'INVALID_INPUT'
+  )
+  await app.evaluate(
+    'transfers: an unknown connection is NOT_CONNECTED',
+    codeFrom(`window.api.transfers.start({ connectionId: ${q(FAKE_ID)}, direction: 'upload', sourcePath: ${q(join(fixture, 'file2.txt'))}, destinationDirectory: '/config', onConflict: 'ask' })`),
+    (v) => v === 'NOT_CONNECTED'
+  )
+  record('UI transfer: Upload is unavailable while a folder is selected', '', await app.js(`document.querySelector(${q(UPLOAD_BUTTON)})?.disabled === true`))
+
+  // Upload with the toolbar button, using the real mouse.
+  const uploadData = randomBytes(8_000_000)
+  await writeFile(join(fixture, 'upload-me.bin'), uploadData)
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
+  await selectRow(join(fixture, 'upload-me.bin'))
+  await app.waitFor(`document.querySelector(${q(UPLOAD_BUTTON)})?.disabled === false`)
+  const uploadBox = await app.js(box(UPLOAD_BUTTON))
+  await app.mouseClick(uploadBox.x + uploadBox.w / 2, uploadBox.y + uploadBox.h / 2)
+  const uploaded = await transferReached('completed', null)
+  const uploadHeadline = await app.js(textOf('[data-testid="transfer-headline"]'))
+  const uploadedRemoteSha = (await server.exec('sha256sum /config/fixture/upload-me.bin')).split(' ')[0]
+  const uploadListed = await app.waitFor(exists(rowFor('/config/fixture/upload-me.bin')), 10000)
+  record(
+    'UI transfer: Upload sends the selected file intact, and the remote pane shows it',
+    { uploaded, uploadHeadline, sameContent: uploadedRemoteSha === sha256(uploadData), uploadListed },
+    uploaded && uploadHeadline === 'Uploaded upload-me.bin' && uploadedRemoteSha === sha256(uploadData) && uploadListed
+  )
+  const firstId = await app.js(barId)
+
+  // Download with the menu command, from the active remote pane.
+  await server.exec('head -c 4000000 /dev/urandom > /config/fixture/from-server.bin && chown 1000:1000 /config/fixture/from-server.bin')
+  await app.clickMenu('command:focus-remote')
+  await app.clickMenu('command:refresh')
+  await selectRow('/config/fixture/from-server.bin')
+  await app.clickMenu('command:transfer')
+  const downloaded = await transferReached('completed', firstId)
+  const serverSha = (await server.exec('sha256sum /config/fixture/from-server.bin')).split(' ')[0]
+  const localSha = sha256(await readFile(join(fixture, 'from-server.bin')).catch(() => Buffer.alloc(0)))
+  const downloadListed = await app.waitFor(exists(rowFor(join(fixture, 'from-server.bin'))), 10000)
+  const leftovers = (await readdir(fixture)).filter((name) => name.includes('fly-part'))
+  record(
+    'UI transfer: Transfer › Transfer to Other Pane downloads from the active pane, intact, and the local pane shows it',
+    { downloaded, sameContent: serverSha === localSha, downloadListed, leftovers },
+    downloaded && serverSha === localSha && downloadListed && leftovers.length === 0
+  )
+  const secondId = await app.js(barId)
+
+  // An existing file: asked first, then replaced; then kept both.
+  await writeFile(join(fixture, 'conflict.txt'), 'new local content')
+  await server.exec('printf old > /config/fixture/conflict.txt && chown 1000:1000 /config/fixture/conflict.txt')
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
+  await selectRow(join(fixture, 'conflict.txt'))
+  await app.clickMenu('command:transfer')
+  const conflictShown = await app.waitFor(exists('[data-testid="conflict-existing"]'), 10000)
+  await app.screenshot('6-transfer-conflict')
+  const conflictFacts = {
+    focused: await app.js(`document.activeElement?.textContent ?? ''`),
+    existing: await app.js(textOf('[data-testid="conflict-existing"]')),
+    incoming: await app.js(textOf('[data-testid="conflict-incoming"]')),
+    serverStill: await server.exec('cat /config/fixture/conflict.txt')
+  }
+  record(
+    'UI conflict: an existing file is not touched until the user chooses; Cancel is focused',
+    conflictFacts,
+    conflictShown && conflictFacts.focused === 'Cancel' && conflictFacts.existing.includes('3 bytes') && conflictFacts.incoming.includes('17 bytes') && conflictFacts.serverStill === 'old'
+  )
+  await app.click(DIALOG, 'Replace')
+  const replaced = await transferReached('completed', secondId)
+  record('UI conflict: Replace overwrites the server copy', await server.exec('cat /config/fixture/conflict.txt'), replaced && (await server.exec('cat /config/fixture/conflict.txt')) === 'new local content')
+  const thirdId = await app.js(barId)
+
+  await app.clickMenu('command:transfer')
+  await app.waitFor(exists('[data-testid="conflict-existing"]'), 10000)
+  await app.click(DIALOG, 'Keep both')
+  const keptBoth = await transferReached('completed', thirdId)
+  const numberedListed = await app.waitFor(exists(rowFor('/config/fixture/conflict (1).txt')), 10000)
+  record(
+    'UI conflict: Keep both saves a numbered copy beside the original',
+    { keptBoth, numberedListed },
+    keptBoth && numberedListed && (await server.exec("cat '/config/fixture/conflict (1).txt'")) === 'new local content' && (await server.exec('cat /config/fixture/conflict.txt')) === 'new local content'
+  )
+  const fourthId = await app.js(barId)
+
+  // A large upload: progress, a refused second transfer, then Cancel.
+  await run('dd', ['if=/dev/zero', `of=${join(fixture, 'big.bin')}`, 'bs=1048576', 'count=768'])
+  await app.clickMenu('command:refresh')
+  await selectRow(join(fixture, 'big.bin'))
+  await app.clickMenu('command:transfer')
+  const progressing = await app.waitFor(
+    `${barStatus} === 'running' && ${barId} !== ${q(fourthId)} && ${textOf('[data-testid="transfer-detail"]')}.includes(' of ') && ${textOf('[data-testid="transfer-detail"]')}.endsWith('/s') && Number(document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')) > 0`,
+    15000
+  )
+  await app.screenshot('7-transfer-running')
+  const runningDetail = await app.js(textOf('[data-testid="transfer-detail"]'))
+  record('UI transfer: a running transfer shows progress, amount and speed', runningDetail, progressing)
+  record('UI transfer: Upload is unavailable while a transfer runs', '', await app.js(`document.querySelector(${q(UPLOAD_BUTTON)})?.disabled === true`))
+
+  await app.clickMenu('command:focus-remote')
+  await selectRow('/config/fixture/file2.txt')
+  await app.clickMenu('command:transfer')
+  const busyRefused = await app.waitFor(`${textOf('[data-testid="transfer-refusal"]')}.includes('Another transfer is still running') && ${barStatus} === 'running'`, 10000)
+  record('UI transfer: a second transfer is refused, and the running one stays in view', await app.js(textOf('[data-testid="transfer-refusal"]')), busyRefused)
+
+  const cancelBox = await app.js(`(() => { const b = [...document.querySelectorAll(${q(`${BAR} button`)})].find((x) => x.textContent === 'Cancel'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
+  await app.mouseClick(cancelBox.x, cancelBox.y)
+  const cancelled = await app.waitFor(`${barStatus} === 'cancelled'`, 15000)
+  const afterCancel = await server.exec('ls -A /config/fixture')
+  record(
+    'UI transfer: Cancel stops a large upload and leaves nothing behind on the server',
+    { cancelled, afterCancel },
+    cancelled && !afterCancel.includes('big.bin')
+  )
+  await app.click('[data-testid="transfer-refusal"]', 'Dismiss')
+  await app.click(BAR, 'Dismiss')
+  record('UI transfer: Dismiss clears the finished transfer and the refusal', '', await app.waitFor(`!${exists(BAR)} && !${exists('[data-testid="transfer-refusal"]')}`))
+  await rm(join(fixture, 'big.bin'))
 
   if (SHOT_DIR) {
     await app.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 640, deviceScaleFactor: 0, mobile: false })

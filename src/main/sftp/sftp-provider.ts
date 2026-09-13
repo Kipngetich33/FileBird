@@ -1,11 +1,11 @@
-import type { FileEntry } from '../../shared/types/files'
+import type { FileEntry, FileKind } from '../../shared/types/files'
 import type { AppError } from '../errors'
 
 /**
  * The seam between the app and any particular SSH library (spec section 7).
  *
- * Milestone 3 subset. Upload, download, delete, mkdir and rename are added in
- * the milestones that need them rather than stubbed here.
+ * Grows with the milestones that need it: connect and list (M3), transfers (M6);
+ * delete and mkdir arrive with file operations (M8).
  */
 export type SftpAuth =
   | { type: 'password'; password: string }
@@ -42,4 +42,44 @@ export interface SftpProvider {
   disconnect(): Promise<void>
   /** Fires at most once, when the connection ends without disconnect() being called. */
   onUnexpectedClose(listener: (error: AppError) => void): void
+
+  /** Null when nothing exists at `path`. Follows symlinks. */
+  stat(path: string): Promise<RemoteFileStat | null>
+  /** Uploads to `remotePath` exactly (the caller picks a temporary name). */
+  upload(localPath: string, remotePath: string, options: UploadOptions): Promise<void>
+  download(remotePath: string, localPath: string, options: TransferOptions): Promise<void>
+  /** Renames, replacing an existing file at `to` (atomically where the server supports it). */
+  rename(from: string, to: string): Promise<void>
+  /** Removes a file. */
+  remove(path: string): Promise<void>
+}
+
+export interface RemoteFileStat {
+  kind: FileKind
+  size: number
+  /** Epoch milliseconds. */
+  modifiedAt: number | null
+  /** Permission bits only. */
+  mode: number | null
+}
+
+export interface TransferOptions {
+  /** Aborting stops the transfer and rejects with TransferCancelled. */
+  signal: AbortSignal
+  /** Called for every chunk: throttle before showing it anywhere. */
+  onProgress: (transferred: number, total: number) => void
+}
+
+export interface UploadOptions extends TransferOptions {
+  mode: number
+  /** Epoch milliseconds to set as the file's modification time, if known. */
+  modifiedAt: number | null
+}
+
+/** Thrown by upload/download when their signal was aborted. Not an error to show. */
+export class TransferCancelled extends Error {
+  constructor() {
+    super('Transfer cancelled')
+    this.name = 'TransferCancelled'
+  }
 }

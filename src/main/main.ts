@@ -7,6 +7,7 @@ import { buildApplicationMenu } from './menu'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
 import { registerSftpIpc } from './ipc/sftp.ipc'
 import { registerSystemIpc } from './ipc/system.ipc'
+import { registerTransfersIpc } from './ipc/transfers.ipc'
 import { KeyringSecretStore } from './secrets/keyring-secret-store'
 import { keychainService } from './secrets/secret-store'
 import { ConnectionProfilesService } from './services/connection-profiles.service'
@@ -15,6 +16,7 @@ import { SshConfigImportService } from './services/ssh-config-import.service'
 import { HostKeyStore } from './sftp/host-keys'
 import { Ssh2SftpProvider } from './sftp/ssh2-provider'
 import { SshConfigImporter } from './ssh/ssh-config'
+import { TransferService } from './transfers/transfer.service'
 import { ConnectionStorage } from './storage/connection-storage'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
@@ -23,6 +25,7 @@ const isDev = !app.isPackaged
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
 let connections: ConnectionService | null = null
+let transfers: TransferService | null = null
 
 /**
  * The home folder Fly starts in and reads ~/.ssh/config from. Unpackaged builds
@@ -124,6 +127,15 @@ void app.whenReady().then(() => {
   )
   registerConnectionsIpc({ profiles, imports, pickPrivateKey })
 
+  const liveConnections = connections
+  transfers = new TransferService({
+    providerFor: (connectionId) => liveConnections.providerFor(connectionId),
+    emit: (update) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send(IPC_EVENTS.TRANSFER_UPDATE, update)
+    }
+  })
+  registerTransfersIpc(transfers)
+
   createMainWindow()
 
   logger.info('Application ready', {
@@ -147,5 +159,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  transfers?.cancelAll()
   void connections?.disconnectAll()
 })

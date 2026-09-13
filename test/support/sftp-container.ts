@@ -82,6 +82,8 @@ export interface SftpTestServer {
 export interface SftpServerOptions {
   /** false makes the server key-only, as most cloud servers are. Default true. */
   passwordAccess?: boolean
+  /** A world-writable tmpfs of this many bytes at /tiny, for "disk full" tests. */
+  tinyDiskBytes?: number
 }
 
 export async function startSftpServer(label: string, options: SftpServerOptions = {}): Promise<SftpTestServer> {
@@ -95,6 +97,9 @@ export async function startSftpServer(label: string, options: SftpServerOptions 
     [
       'run', '-d', '--rm', '--name', name,
       '-p', '127.0.0.1::2222',
+      ...(options.tinyDiskBytes === undefined
+        ? []
+        : ['--mount', `type=tmpfs,destination=/tiny,tmpfs-size=${options.tinyDiskBytes},tmpfs-mode=1777`]),
       '-e', 'PUID=1000', '-e', 'PGID=1000', '-e', 'TZ=Etc/UTC',
       '-e', 'USER_NAME=fly', '-e', `USER_PASSWORD=${password}`, '-e', `PASSWORD_ACCESS=${passwordAccess}`,
       SFTP_IMAGE

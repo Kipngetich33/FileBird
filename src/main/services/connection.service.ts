@@ -144,6 +144,13 @@ export class ConnectionService {
     return this.options.hostKeys.forget(host, port)
   }
 
+  /** The live provider for a connection, for transfers. Throws NOT_CONNECTED. */
+  providerFor(connectionId: string): SftpProvider {
+    const connection = this.connections.get(connectionId)
+    if (connection === undefined) throw notConnected()
+    return connection.provider
+  }
+
   async list(connectionId: string, path: string): Promise<DirectoryListing> {
     const connection = this.connections.get(connectionId)
     if (connection === undefined) throw notConnected()

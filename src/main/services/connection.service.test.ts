@@ -6,7 +6,7 @@ import type { ConnectRequest, ConnectionClosedEvent } from '../../shared/types/c
 import type { FileEntry } from '../../shared/types/files'
 import { AppError } from '../errors'
 import { HostKeyStore, hostKeyFingerprint } from '../sftp/host-keys'
-import type { SftpConnectOptions, SftpProvider } from '../sftp/sftp-provider'
+import type { RemoteFileStat, SftpConnectOptions, SftpProvider } from '../sftp/sftp-provider'
 import { ConnectionService } from './connection.service'
 
 const KEY_A = Buffer.from('AAAAC3NzaC1lZDI1NTE5AAAAIL+WK19nFj1HtD6rGNBy0QNPm3X4T66kM+3LiYvnV0ba', 'base64')
@@ -58,6 +58,23 @@ class FakeProvider implements SftpProvider {
 
   simulateNetworkLoss(): void {
     this.closeListener?.(new AppError('CONNECTION_LOST', 'Network connection lost.'))
+  }
+
+  // Transfers aren't part of these tests.
+  stat(): Promise<RemoteFileStat | null> {
+    throw new Error('not used')
+  }
+  upload(): Promise<void> {
+    throw new Error('not used')
+  }
+  download(): Promise<void> {
+    throw new Error('not used')
+  }
+  rename(): Promise<void> {
+    throw new Error('not used')
+  }
+  remove(): Promise<void> {
+    throw new Error('not used')
   }
 }
 

@@ -30,6 +30,9 @@ export type AppErrorCode =
   | 'KEY_PASSPHRASE_INCORRECT'
   | 'KEYCHAIN_UNAVAILABLE'
   | 'SSH_CONFIG_UNAVAILABLE'
+  | 'TRANSFER_FAILED'
+  | 'TRANSFER_BUSY'
+  | 'DISK_FULL'
   | 'INTERNAL'
 
 export const isAppErrorPayload = (value: unknown): value is AppErrorPayload =>

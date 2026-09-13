@@ -65,9 +65,14 @@ export function FilePane({
       focus: () => paneRef.current?.focus(),
       refresh: () => void refresh(),
       goBack: () => void goBack(),
-      goUp: () => void goUp()
+      goUp: () => void goUp(),
+      currentPath: () => listing?.path ?? null,
+      selectedEntry: () => entries.find((entry) => entry.path === selectedPath) ?? null,
+      refreshIfShowing: (path) => {
+        if (listing?.path === path) void refresh()
+      }
     }),
-    [refresh, goBack, goUp]
+    [refresh, goBack, goUp, listing, entries, selectedPath]
   )
 
   // Keep the selected row in view as the keyboard moves it.

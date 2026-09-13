@@ -10,6 +10,7 @@ import type {
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
+import type { StartTransferOutcome, StartTransferRequest, TransferUpdate } from '../shared/types/transfers'
 import type { SystemVersions } from '../shared/types/system'
 
 /**
@@ -61,6 +62,19 @@ const api = {
       ipcRenderer.invoke(IPC.SSH_CONFIG_PREVIEW, options),
     import: (aliases: string[], options: { allowCommands: boolean }): Promise<ConnectionSummary[]> =>
       ipcRenderer.invoke(IPC.SSH_CONFIG_IMPORT, aliases, options)
+  },
+  transfers: {
+    start: (request: StartTransferRequest): Promise<StartTransferOutcome> =>
+      ipcRenderer.invoke(IPC.TRANSFERS_START, request),
+    cancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.TRANSFERS_CANCEL, id),
+    /** Returns an unsubscribe function. The listener receives the payload only. */
+    onUpdate: (listener: (update: TransferUpdate) => void): (() => void) => {
+      const forward = (_event: IpcRendererEvent, payload: TransferUpdate): void => listener(payload)
+      ipcRenderer.on(IPC_EVENTS.TRANSFER_UPDATE, forward)
+      return () => {
+        ipcRenderer.removeListener(IPC_EVENTS.TRANSFER_UPDATE, forward)
+      }
+    }
   },
   sftp: {
     trustHostKeyAndConnect: (token: string): Promise<ConnectOutcome> =>

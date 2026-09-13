@@ -59,9 +59,9 @@ describe('buildApplicationMenu', () => {
   })
 
   it.each([
-    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up' }],
-    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up' }],
-    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up' }]
+    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T' }],
+    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T' }],
+    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T' }]
   ] as const)('uses platform-appropriate shortcuts on %s', (platform, expected) => {
     const template = buildApplicationMenu({ platform, isDev: false, send: () => undefined })
     const accelerators = Object.fromEntries(

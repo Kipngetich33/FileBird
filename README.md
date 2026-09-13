@@ -79,6 +79,7 @@ src/
 │   ├── logger.ts      structured logging with credential redaction
 │   ├── ipc/           validated IPC handlers
 │   ├── services/      local files, connections, saved profiles, SSH config import
+│   ├── transfers/     uploads and downloads: progress, safe writes, conflicts
 │   ├── sftp/          SftpProvider abstraction, ssh2 implementation, host-key trust store
 │   ├── ssh/           private keys, ~/.ssh/config reading
 │   ├── secrets/       OS keychain access (the only place secrets are stored)
@@ -102,6 +103,21 @@ focus it and use ←/→; double-click resets) — the position is remembered.
 | `↑` `↓` · `Enter` · `Backspace` | Select · Open · Parent folder |
 | `Cmd+R` or `F5` | Refresh the active pane |
 | `Cmd+[` · `Cmd+↑` | Back · Parent folder (Go menu) |
+| `Cmd+T` | Transfer the active pane's selected file to the other pane's folder |
+
+## Transferring files
+
+Select a file and press **Upload** (local pane), **Download** (remote pane) or
+`Cmd+T`. The file goes to the folder the other pane is showing; that pane
+refreshes when it arrives. The bar above the status bar shows progress and speed,
+and **Cancel** stops the transfer.
+
+- If a file with that name already exists, Fly asks: **Replace**, **Keep both**
+  (saves `name (1).ext`) or **Cancel**. A folder is never replaced.
+- Files are written under a hidden temporary name and renamed only once complete,
+  so a failed or cancelled transfer never leaves a half-written file behind.
+  Permissions and the modification time are kept.
+- One file at a time for now; folders, multiple files and a queue come next.
 
 ## Security notes
 
