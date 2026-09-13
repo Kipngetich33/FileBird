@@ -39,6 +39,9 @@ const defaultDateFormat = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short'
 })
 
+/** Date only, for panes too narrow for the full date and time. */
+export const shortDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'short' })
+
 export function formatModified(epochMs: number | null, format = defaultDateFormat): string {
   return epochMs === null ? '—' : format.format(epochMs)
 }

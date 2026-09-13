@@ -1,12 +1,19 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { IPC_EVENTS } from '../shared/constants/channels'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
+import { registerSftpIpc } from './ipc/sftp.ipc'
 import { registerSystemIpc } from './ipc/system.ipc'
+import { ConnectionService } from './services/connection.service'
+import { HostKeyStore } from './sftp/host-keys'
+import { Ssh2SftpProvider } from './sftp/ssh2-provider'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
 
 const isDev = !app.isPackaged
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+
+let connections: ConnectionService | null = null
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -51,6 +58,18 @@ void app.whenReady().then(() => {
   applyContentSecurityPolicy()
   registerSystemIpc()
   registerLocalFilesIpc()
+
+  connections = new ConnectionService({
+    hostKeys: new HostKeyStore(join(app.getPath('userData'), 'known-hosts.json')),
+    createProvider: () => new Ssh2SftpProvider(),
+    onConnectionClosed: (event) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send(IPC_EVENTS.SFTP_CONNECTION_CLOSED, event)
+      }
+    }
+  })
+  registerSftpIpc(connections)
+
   createMainWindow()
 
   logger.info('Application ready', {
@@ -67,6 +86,12 @@ void app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  // No window means no one can see or use a connection, so don't keep it open.
+  void connections?.disconnectAll()
   // macOS apps conventionally stay running with no windows; other platforms quit.
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  void connections?.disconnectAll()
 })

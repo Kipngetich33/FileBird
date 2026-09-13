@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type JSX, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, type JSX, type KeyboardEvent, type ReactNode } from 'react'
 import type { FileEntry } from '@shared/types/files'
 import type { DirectoryState } from '@renderer/hooks/useDirectory'
 import { PaneHeader } from './PaneHeader'
@@ -6,7 +6,10 @@ import { FileTable } from './FileTable'
 
 interface FilePaneProps {
   title: string
+  subtitle?: string
   directory: DirectoryState
+  /** Extra header controls, e.g. Disconnect on the remote pane. */
+  actions?: ReactNode
 }
 
 /**
@@ -15,7 +18,7 @@ interface FilePaneProps {
  * Keyboard (spec section 14): ↑/↓ select, Enter opens, Backspace goes to the
  * parent folder, F5 refreshes. Delete and F2 arrive with file operations (M8).
  */
-export function FilePane({ title, directory }: FilePaneProps): JSX.Element {
+export function FilePane({ title, subtitle, directory, actions }: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, loading, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, dismissError } = directory
   const paneRef = useRef<HTMLElement>(null)
@@ -87,6 +90,8 @@ export function FilePane({ title, directory }: FilePaneProps): JSX.Element {
     >
       <PaneHeader
         title={title}
+        subtitle={subtitle}
+        actions={actions}
         path={listing?.path ?? null}
         loading={loading}
         canGoBack={canGoBack}

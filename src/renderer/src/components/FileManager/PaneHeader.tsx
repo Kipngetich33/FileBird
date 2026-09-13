@@ -2,6 +2,8 @@ import type { JSX, ReactNode } from 'react'
 
 interface PaneHeaderProps {
   title: string
+  /** e.g. the user@host of a remote pane. */
+  subtitle?: string
   path: string | null
   loading: boolean
   canGoBack: boolean
@@ -9,21 +11,32 @@ interface PaneHeaderProps {
   onBack: () => void
   onUp: () => void
   onRefresh: () => void
+  /** Pane-specific controls at the right end, such as Disconnect. */
+  actions?: ReactNode
 }
 
 export function PaneHeader({
   title,
+  subtitle,
   path,
   loading,
   canGoBack,
   canGoUp,
   onBack,
   onUp,
-  onRefresh
+  onRefresh,
+  actions
 }: PaneHeaderProps): JSX.Element {
   return (
     <div className="flex h-10 shrink-0 items-center gap-3 border-b border-white/[0.06] px-3">
-      <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">{title}</span>
+      <span className="flex shrink-0 items-baseline gap-2">
+        <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">{title}</span>
+        {subtitle !== undefined && (
+          <span data-testid="pane-subtitle" className="max-w-40 truncate text-[11px] text-zinc-400">
+            {subtitle}
+          </span>
+        )}
+      </span>
 
       <div className="flex items-center gap-0.5">
         <ToolbarButton label="Back" disabled={!canGoBack} onClick={onBack}>
@@ -46,6 +59,7 @@ export function PaneHeader({
       </span>
 
       {loading && <span className="shrink-0 text-[11px] text-zinc-500">Loading…</span>}
+      {actions}
     </div>
   )
 }

@@ -12,6 +12,8 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts'],
+    // Container-backed tests run separately: npm run test:integration
+    exclude: ['**/node_modules/**', 'src/**/*.integration.test.ts'],
     environment: 'node'
   }
 })

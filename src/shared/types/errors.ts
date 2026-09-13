@@ -14,6 +14,14 @@ export type AppErrorCode =
   | 'NOT_FOUND'
   | 'PERMISSION_DENIED'
   | 'NOT_A_DIRECTORY'
+  | 'HOST_NOT_FOUND'
+  | 'CONNECTION_REFUSED'
+  | 'UNREACHABLE'
+  | 'CONNECTION_TIMED_OUT'
+  | 'AUTH_FAILED'
+  | 'HANDSHAKE_FAILED'
+  | 'CONNECTION_LOST'
+  | 'NOT_CONNECTED'
   | 'INTERNAL'
 
 export const isAppErrorPayload = (value: unknown): value is AppErrorPayload =>
