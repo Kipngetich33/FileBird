@@ -438,7 +438,18 @@ try {
   await app.click(profileRow('Smoke password'), 'Connect')
   const askedAgain = await app.waitFor(exists('input[name="secret"]'), 10000)
   record('UI password: not ticking Remember means it is asked again, and nothing is stored', '', askedAgain && !(await keychainHas(`connection/${passwordId}/password`)))
-  await app.click(DIALOG, 'Cancel')
+  // Remember it this time, then forget it from the list.
+  await app.type('input[name="secret"]', server.password)
+  await app.js(`document.querySelector('input[name="remember"]').click()`)
+  await app.click(DIALOG, 'Connect')
+  await app.waitFor(`${pathOf(REMOTE)} === '/config'`, 15000)
+  await app.click(REMOTE, 'Disconnect')
+  const passwordAccount = `connection/${passwordId}/password`
+  const passwordSaved = await app.waitFor(`${textOf(`${profileRow('Smoke password')} [data-testid="saved-secret"]`)} === 'password saved'`)
+  record('UI password: a remembered password is saved in the Keychain and shown as saved', '', passwordSaved && (await keychainHas(passwordAccount)))
+  await app.click(profileRow('Smoke password'), 'Forget password')
+  const badgeGone = await app.waitFor(`!${exists(`${profileRow('Smoke password')} [data-testid="saved-secret"]`)}`)
+  record('UI password: Forget removes the saved password from the Keychain', '', badgeGone && !(await keychainHas(passwordAccount)))
 
   // ------------------------------------------------------------- SSH config import ---
 

@@ -57,6 +57,16 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
     }
   }
 
+  async function forgetSecret(profile: ConnectionSummary): Promise<void> {
+    try {
+      await connectionsService.forgetSecret(profile.id)
+      setListNotice(`Forgot the saved ${profile.savedSecret ?? 'secret'} for "${profile.name}".`)
+    } catch (cause) {
+      setFormError(cause as AppErrorPayload)
+    }
+    await reload()
+  }
+
   async function confirmDelete(profile: ConnectionSummary): Promise<void> {
     setDeleting(null)
     try {
@@ -108,6 +118,7 @@ export function RemotePane({ remote }: { remote: RemoteConnectionState }): JSX.E
                     setView({ name: 'edit', profile })
                   }}
                   onDelete={setDeleting}
+                  onForgetSecret={(profile) => void forgetSecret(profile)}
                   onNew={() => {
                     setFormError(null)
                     setView({ name: 'new' })

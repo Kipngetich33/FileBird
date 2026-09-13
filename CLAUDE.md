@@ -24,7 +24,7 @@ private-key login (optional passphrase), passwords/passphrases remembered in the
 OS keychain only after the server accepts them, import from `~/.ssh/config`, and
 "connect without saving". Host keys are trusted on first use; a changed key is
 refused. Verified by `npm test` (226 unit), `npm run test:integration` (real
-OpenSSH, real Keychain, real `ssh`) and `npm run smoke` (47 checks driving the
+OpenSSH, real Keychain, real `ssh`) and `npm run smoke` (49 checks driving the
 real app, including a restart that proves secrets persist).
 
 Next: **Milestone 5 (Dual Pane Interface)** — not started. Plan it before

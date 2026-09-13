@@ -11,6 +11,7 @@ interface ConnectionListProps {
   onConnect: (profile: ConnectionSummary) => void
   onEdit: (profile: ConnectionSummary) => void
   onDelete: (profile: ConnectionSummary) => void
+  onForgetSecret: (profile: ConnectionSummary) => void
   onNew: () => void
   onImport: () => void
   onDismissError: () => void
@@ -125,6 +126,11 @@ export function ConnectionList(props: ConnectionListProps): JSX.Element {
                   <button type="button" disabled={busy} onClick={() => props.onConnect(profile)} className={SMALL_BUTTON}>
                     Connect
                   </button>
+                  {profile.savedSecret !== null && (
+                    <button type="button" onClick={() => props.onForgetSecret(profile)} className={SMALL_BUTTON}>
+                      Forget {profile.savedSecret}
+                    </button>
+                  )}
                   <button type="button" onClick={() => props.onEdit(profile)} className={SMALL_BUTTON}>
                     Edit
                   </button>
