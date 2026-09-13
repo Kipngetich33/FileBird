@@ -94,16 +94,29 @@ async function launchApp() {
     env: { ...inherited, FLY_DEV_HOME: fixture, FLY_DEV_TRASH_DIR: join(scratch, 'trash') }
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
+  const launchedAt = Date.now()
   child.stdout.on('data', (d) => mainLogs.push(d.toString()))
   child.stderr.on('data', (d) => mainLogs.push(d.toString()))
 
+  // Two pages appear at launch: the FileFly start screen and the (still hidden) main window.
   let page
-  for (let i = 0; i < 60 && !page; i++) {
+  const splash = { seen: false, wordmark: null, canvas: false }
+  for (let i = 0; i < 60 && (!page || !splash.seen); i++) {
     try {
       const targets = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()
-      page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+      page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && !t.url.includes('splash.html'))
+      const splashPage = targets.find((t) => t.type === 'page' && t.url.includes('splash.html'))
+      if (splashPage && !splash.seen) {
+        splash.seen = true
+        const probe = new WebSocket(splashPage.webSocketDebuggerUrl)
+        await new Promise((r) => probe.addEventListener('open', r))
+        const reply = new Promise((r) => probe.addEventListener('message', (ev) => r(JSON.parse(ev.data))))
+        probe.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: `new Promise((r) => setTimeout(() => r(JSON.stringify({ wordmark: document.querySelector('#wordmark span')?.textContent, canvas: !!document.querySelector('canvas#stream') })), 300))`, awaitPromise: true, returnByValue: true } }))
+        Object.assign(splash, JSON.parse((await reply).result?.result?.value ?? '{}'))
+        probe.close()
+      }
     } catch {}
-    if (!page) await sleep(250)
+    if (!page || !splash.seen) await sleep(100)
   }
   if (!page) throw new Error('No page target appeared')
 
@@ -163,15 +176,74 @@ async function launchApp() {
     return res.result?.result?.value
   }
 
+  // Floating over other apps and every Space, so it can't open out of sight.
+  splash.floating = await mainEval(`JSON.stringify(process.mainModule.require('electron').BrowserWindow.getAllWindows().filter((w) => w.webContents.getURL().includes('splash.html')).map((w) => ({ onTop: w.isAlwaysOnTop(), allSpaces: w.isVisibleOnAllWorkspaces() }))[0] ?? null)`)
+
+  // The main window appears only once the start screen has had its time.
+  let mainShownAfter = null
+  for (const deadline = Date.now() + 15000; Date.now() < deadline; await sleep(100)) {
+    const visible = await mainEval(`process.mainModule.require('electron').BrowserWindow.getAllWindows().filter((w) => w.isVisible()).map((w) => w.webContents.getURL().includes('splash.html') ? 'splash' : 'main').join(',')`)
+    if (visible === 'main') {
+      mainShownAfter = Date.now() - launchedAt
+      break
+    }
+  }
+  splash.mainShownAfter = mainShownAfter
+
+  // Floating over full-screen apps hides the Dock icon and menu bar on macOS; the hand-off restores them.
+  splash.dockVisibleAfter = false
+  for (const deadline = Date.now() + 3000; Date.now() < deadline; await sleep(100)) {
+    if (await mainEval(`process.mainModule.require('electron').app.dock?.isVisible() ?? true`)) {
+      splash.dockVisibleAfter = true
+      break
+    }
+  }
+
   // Focus events fire only in a focused page, and macOS does not always
   // activate an app launched from a background process (the relaunch often
   // isn't, and it can't take focus itself), so have the page act focused.
   await send('Emulation.setFocusEmulationEnabled', { enabled: true })
 
+  // Native menus can't be driven over CDP: record each right-click menu Fly
+  // pops up, and choose from it by label, as a person would.
+  await mainEval(`(() => {
+    const { Menu } = process.mainModule.require('electron')
+    globalThis.__smokeContextMenus = []
+    globalThis.__smokeContextPick = null
+    Menu.prototype.popup = function (options) {
+      globalThis.__smokeContextMenus.push(this.items.map((item) => (item.type === 'separator' ? '—' : item.label + (item.enabled ? '' : ' (off)'))))
+      const pick = this.items.find((item) => item.label === globalThis.__smokeContextPick && item.enabled)
+      globalThis.__smokeContextPick = null
+      if (pick) pick.click()
+      options?.callback?.()
+    }
+    return true
+  })()`)
+
   const self = {
+    splash,
     send,
     js,
     mainEval,
+    /**
+     * Right-clicks an element (40px in from its left edge, or its centre) with a
+     * real mouse event and returns the menu Fly showed, choosing `pick` from it.
+     */
+    async contextMenu(selector, pick = null, { centre = false } = {}) {
+      const before = await mainEval(`globalThis.__smokeContextPick = ${JSON.stringify(pick)}; globalThis.__smokeContextMenus.length`)
+      await js(`document.querySelector(${q(selector)}).scrollIntoView({ block: 'center' })`)
+      const r = await js(`(() => { const r = document.querySelector(${q(selector)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height } })()`)
+      const x = centre ? r.x + r.w / 2 : r.x + 40
+      const y = r.y + r.h / 2
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'right', buttons: 2, clickCount: 1 })
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'right', buttons: 0, clickCount: 1 })
+      for (const deadline = Date.now() + 3000; Date.now() < deadline; await sleep(50)) {
+        const menus = JSON.parse(await mainEval('JSON.stringify(globalThis.__smokeContextMenus)'))
+        if (menus.length > before) return menus[menus.length - 1]
+      }
+      await mainEval('globalThis.__smokeContextPick = null')
+      return null
+    },
     /** Clicks an application menu item by id, exactly as choosing it from the menu bar would. */
     async clickMenu(id) {
       const result = await mainEval(`(() => { const item = process.mainModule.require('electron').Menu.getApplicationMenu().getMenuItemById(${q(id)}); if (!item) return 'missing'; item.click(); return 'clicked' })()`)
@@ -378,6 +450,12 @@ try {
   )
 
   app = await launchApp()
+  record(
+    'start screen: FileFly shows its animated start screen first, floating over other apps and Spaces, then hands over to the main window after about 6 seconds, with the Dock icon and menu bar back',
+    app.splash,
+    app.splash.seen && app.splash.wordmark === 'FileFly' && app.splash.canvas && app.splash.mainShownAfter !== null && app.splash.mainShownAfter >= 5800 &&
+      app.splash.floating === JSON.stringify({ onTop: true, allSpaces: true }) && app.splash.dockVisibleAfter
+  )
   const rendered = await app.waitFor(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length > 0`)
 
   // ------------------------------------------------------------- architecture ---
@@ -389,7 +467,7 @@ try {
     (v) =>
       v ===
       JSON.stringify({
-        app: ['onMenuCommand'],
+        app: ['onMenuCommand', 'showContextMenu'],
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
         files: ['createFolder', 'delete', 'rename'],
         keys: ['inspect', 'pick'],
@@ -400,6 +478,7 @@ try {
         transfers: ['cancel', 'cancelAll', 'clearFinished', 'list', 'onUpdate', 'retry', 'retryFailed', 'start']
       })
   )
+  await app.evaluate('context menu: a request with an unknown action is INVALID_INPUT', codeFrom(`window.api.app.showContextMenu([{ action: 'format-disk', enabled: true }])`), (v) => v === 'INVALID_INPUT')
   await app.evaluate('node hidden', `[window.require, window.process, window.module].every(v => v === undefined)`, (v) => v === true)
   await app.evaluate('tailwind applied', `getComputedStyle(document.body).backgroundColor`, (v) => v !== 'rgba(0, 0, 0, 0)' && v !== 'transparent')
 
@@ -437,8 +516,17 @@ try {
   record('UI local: pane rendered rows', String(rendered), rendered)
   await app.evaluate('UI local: folders first, natural order', rowNames(LOCAL), (v) => v === JSON.stringify(EXPECTED_LOCAL))
 
-  await app.doubleClick(rowFor(join(fixture, 'alpha')))
-  record('UI local: double-click opens a folder', await app.js(pathOf(LOCAL)), await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`))
+  const rowCentre = async (path) => {
+    await app.js(`document.querySelector(${q(rowFor(path))}).scrollIntoView({ block: 'center' })`)
+    const r = await app.js(box(rowFor(path)))
+    return { x: r.x + 40, y: r.y + r.h / 2 }
+  }
+  // Two folders inside alpha, so a double-click's second click would land on one of them.
+  await mkdir(join(fixture, 'alpha', 'a-inner'))
+  await mkdir(join(fixture, 'alpha', 'b-inner'))
+  const alphaPoint = await rowCentre(join(fixture, 'alpha'))
+  await app.mouseClick(alphaPoint.x, alphaPoint.y)
+  record('UI local: a single click opens a folder', await app.js(pathOf(LOCAL)), await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`))
   await app.js(`document.querySelector(${q(`${LOCAL} button[aria-label="Back"]`)}).click()`)
   record(
     'UI local: Back returns and reselects the folder',
@@ -450,6 +538,37 @@ try {
   record('UI local: Enter opens the selected folder', await app.js(pathOf(LOCAL)), await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`))
   await app.press('Backspace', 'Backspace', 8)
   record('UI local: Backspace goes to the parent folder', await app.js(pathOf(LOCAL)), await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)}`))
+
+  // A double-click out of habit: the first click opens alpha; the second, arriving
+  // after alpha's rows are showing, lands on a folder inside it and must not open that.
+  const habit = await rowCentre(join(fixture, 'alpha'))
+  await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: habit.x, y: habit.y, button: 'left', buttons: 1, clickCount: 1 })
+  await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: habit.x, y: habit.y, button: 'left', buttons: 0, clickCount: 1 })
+  await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))} && ${exists(rowFor(join(fixture, 'alpha', 'b-inner')))}`)
+  const underPointer = await app.js(`document.elementFromPoint(${habit.x}, ${habit.y})?.closest('[role="row"]')?.dataset.path ?? null`)
+  await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: habit.x, y: habit.y, button: 'left', buttons: 1, clickCount: 2 })
+  await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: habit.x, y: habit.y, button: 'left', buttons: 0, clickCount: 2 })
+  await sleep(400)
+  record(
+    'UI local: a double-click opens the folder once, not the folder that lands under the pointer',
+    { underPointer, path: await app.js(pathOf(LOCAL)) },
+    underPointer !== null && underPointer.startsWith(join(fixture, 'alpha') + '/') && (await app.js(pathOf(LOCAL))) === join(fixture, 'alpha')
+  )
+  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.press('Backspace', 'Backspace', 8)
+  await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)}`)
+  await rm(join(fixture, 'alpha', 'a-inner'), { recursive: true })
+  await rm(join(fixture, 'alpha', 'b-inner'), { recursive: true })
+
+  const cmdPoint = await rowCentre(join(fixture, 'link-to-alpha'))
+  await app.mouseClick(cmdPoint.x, cmdPoint.y, 1, 4 /* Cmd */)
+  await sleep(300)
+  record(
+    'UI local: Cmd-click selects a folder without opening it',
+    { path: await app.js(pathOf(LOCAL)), selected: await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [aria-selected="true"]`)})].map((row) => row.dataset.path)`) },
+    (await app.js(pathOf(LOCAL))) === fixture &&
+      (await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [aria-selected="true"]`)})].map((row) => row.dataset.path)`)).includes(join(fixture, 'link-to-alpha'))
+  )
   await writeFile(join(fixture, 'added-later.txt'), '')
   await app.press('F5', 'F5', 116)
   record('UI local: F5 refreshes the listing', '', await app.waitFor(exists(rowFor(join(fixture, 'added-later.txt')))))
@@ -675,7 +794,7 @@ try {
 
   await app.waitFor(exists(rowFor('/config/fixture/file2.txt')))
   await app.js(`document.querySelector(${q(rowFor('/config/fixture/file2.txt'))}).click()`)
-  await app.js(`document.querySelector(${q(rowFor(join(fixture, 'alpha')))}).click()`)
+  const alphaMenu = await app.contextMenu(rowFor(join(fixture, 'alpha')))
   await app.evaluate(
     'footer: each pane shows its own count and selection',
     `JSON.stringify({ local: ${textOf(`${LOCAL} [data-testid="pane-selection"]`)}, remote: ${textOf(`${REMOTE} [data-testid="pane-selection"]`)}, remoteCount: ${textOf(`${REMOTE} [data-testid="pane-count"]`)} })`,
@@ -683,6 +802,59 @@ try {
       const d = JSON.parse(v)
       return d.local === 'alpha · Folder' && d.remote === 'file2.txt · 5 bytes' && d.remoteCount === `${EXPECTED_REMOTE.length} items`
     }
+  )
+
+  // ------------------------------------------------------- right-click menus ---
+
+  record(
+    'context menu: right-clicking a local folder selects it and offers Open, Upload, New Folder, Rename, Move to Trash and Refresh',
+    { alphaMenu, path: await app.js(pathOf(LOCAL)) },
+    JSON.stringify(alphaMenu) === JSON.stringify(['Open', '—', 'Upload', '—', 'New Folder', 'Rename…', 'Move to Trash…', '—', 'Refresh']) &&
+      (await app.js(pathOf(LOCAL))) === fixture
+  )
+  const remoteFileMenu = await app.contextMenu(rowFor('/config/fixture/file2.txt'))
+  record(
+    'context menu: a remote file offers Download and a permanent Delete, and no Open',
+    remoteFileMenu,
+    JSON.stringify(remoteFileMenu) === JSON.stringify(['Download', '—', 'New Folder', 'Rename…', 'Delete…', '—', 'Refresh'])
+  )
+  await app.contextMenu(rowFor(join(fixture, 'alpha')))
+  await app.mouseClick((await rowCentre(join(fixture, 'file2.txt'))).x, (await rowCentre(join(fixture, 'file2.txt'))).y, 1, 4 /* Cmd */)
+  const selectionMenu = await app.contextMenu(rowFor(join(fixture, 'file2.txt')))
+  record(
+    'context menu: right-clicking inside a selection keeps it, and acts on all of it (no Rename for two)',
+    { selectionMenu, footer: await app.js(textOf(`${LOCAL} [data-testid="pane-selection"]`)) },
+    JSON.stringify(selectionMenu) === JSON.stringify(['Upload', '—', 'New Folder', 'Rename… (off)', 'Move to Trash…', '—', 'Refresh']) &&
+      (await app.js(textOf(`${LOCAL} [data-testid="pane-selection"]`))).startsWith('2 selected')
+  )
+  // A plain click on a file makes it the only selection again.
+  await app.mouseClick((await rowCentre(join(fixture, 'file2.txt'))).x, (await rowCentre(join(fixture, 'file2.txt'))).y)
+  await app.contextMenu(rowFor(join(fixture, 'alpha')), 'Open')
+  const openedFromMenu = await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`)
+  const emptyMenu = await app.contextMenu(`${LOCAL} [data-testid="file-list"] p`, 'New Folder', { centre: true })
+  const newFolderAsked = await app.waitFor(`${textOf(DIALOG)}.includes('New folder')`)
+  await app.mouseClickButton(DIALOG, 'Cancel')
+  await app.waitFor(`!${exists(DIALOG)}`)
+  record(
+    'context menu: Open opens the folder; the empty part of a list offers New Folder and Refresh, and New Folder asks for a name',
+    { openedFromMenu, emptyMenu, newFolderAsked },
+    openedFromMenu && newFolderAsked && JSON.stringify(emptyMenu) === JSON.stringify(['New Folder', '—', 'Refresh'])
+  )
+  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.press('Backspace', 'Backspace', 8)
+  await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)}`)
+  await app.contextMenu(rowFor(join(fixture, 'file10.txt')), 'Rename…')
+  const renameAsked = await app.waitFor(`document.querySelector('input[name="item-name"]')?.value === 'file10.txt'`)
+  await app.mouseClickButton(DIALOG, 'Cancel')
+  await app.waitFor(`!${exists(DIALOG)}`)
+  await app.contextMenu(rowFor(join(fixture, 'file10.txt')), 'Move to Trash…')
+  const trashAskedFromMenu = await app.waitFor(`${textOf(DIALOG)}.includes('Move "file10.txt" to the Trash?')`)
+  await app.mouseClickButton(DIALOG, 'Cancel')
+  await app.waitFor(`!${exists(DIALOG)}`)
+  record(
+    'context menu: Rename… and Move to Trash… open their dialogs for the right-clicked file',
+    { renameAsked, trashAskedFromMenu },
+    renameAsked && trashAskedFromMenu && (await stat(join(fixture, 'file10.txt')).then(() => true, () => false))
   )
 
   // ------------------------------------------------ M6–M7: transfers and the queue ---
@@ -697,6 +869,11 @@ try {
   const allDone = (names) => names.map((name) => `${jobStatus(name)} === 'completed'`).join(' && ')
   const selectRow = async (path, modifiers = 0) => {
     await app.waitFor(exists(rowFor(path)), 10000)
+    // A plain click opens a folder; right-clicking is how a person selects just it.
+    if (modifiers === 0 && (await app.js(`document.querySelector(${q(rowFor(path))}).dataset.kind === 'directory'`))) {
+      await app.contextMenu(rowFor(path))
+      return
+    }
     await app.js(`document.querySelector(${q(rowFor(path))}).scrollIntoView({ block: 'center' })`)
     const r = await app.js(box(rowFor(path)))
     await app.mouseClick(r.x + 40, r.y + r.h / 2, 1, modifiers)
@@ -1202,7 +1379,20 @@ try {
   record(
     'UI drag: a file dropped from outside the app neither replaces the UI nor starts a transfer',
     { hrefBefore, hrefAfter: await app.js('location.href') },
-    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'Fly' && (await app.js(jobCount)) === jobsBefore
+    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'FileFly' && (await app.js(jobCount)) === jobsBefore
+  )
+
+  // Upload chosen from a right-click menu goes through the same queue.
+  await writeFile(join(fixture, 'menu-upload.txt'), 'from the menu')
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
+  await app.waitFor(exists(rowFor(join(fixture, 'menu-upload.txt'))))
+  await app.contextMenu(rowFor(join(fixture, 'menu-upload.txt')), 'Upload')
+  const menuUploaded = await app.waitFor(`${jobStatus('menu-upload.txt')} === 'completed'`, 20000)
+  record(
+    'context menu: Upload sends the right-clicked file to the server through the queue',
+    { menuUploaded },
+    menuUploaded && (await server.exec('cat /config/fixture/menu-upload.txt')) === 'from the menu'
   )
 
   await app.mouseClickButton(PANEL, 'Clear finished')
@@ -1386,7 +1576,7 @@ try {
   record(
     'quit: with a transfer running, closing the window and quitting both ask first; Cancel keeps the app and the transfer',
     { questions, closeKept, quitKept },
-    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit Fly and cancel 1 transfer?']) && closeKept && quitKept
+    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit FileFly and cancel 1 transfer?']) && closeKept && quitKept
   )
 
   await app.mainEval('globalThis.__answer = 1')

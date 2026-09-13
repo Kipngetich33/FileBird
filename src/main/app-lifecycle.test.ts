@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { developmentUserData, stopTransfersQuestion } from './app-lifecycle'
+import { SPLASH_DURATION_MS, splashDuration, splashWait, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
 
-describe('developmentUserData', () => {
+describe('userDataFolder', () => {
   it('separates unpackaged runs from the installed app, unless a folder was given', () => {
-    expect(developmentUserData({ isPackaged: false, hasUserDataSwitch: false, appData: '/Users/me/Library/Application Support' })).toBe(
+    expect(userDataFolder({ isPackaged: false, hasUserDataSwitch: false, appData: '/Users/me/Library/Application Support' })).toBe(
       '/Users/me/Library/Application Support/Fly (development)'
     )
-    expect(developmentUserData({ isPackaged: false, hasUserDataSwitch: true, appData: '/x' })).toBeNull()
-    expect(developmentUserData({ isPackaged: true, hasUserDataSwitch: false, appData: '/x' })).toBeNull()
+    expect(userDataFolder({ isPackaged: false, hasUserDataSwitch: true, appData: '/x' })).toBeNull()
+    expect(userDataFolder({ isPackaged: true, hasUserDataSwitch: true, appData: '/x' })).toBeNull()
+  })
+
+  it('keeps the installed app in the folder it has always used, whatever the app is called', () => {
+    expect(userDataFolder({ isPackaged: true, hasUserDataSwitch: false, appData: '/Users/me/Library/Application Support' })).toBe(
+      '/Users/me/Library/Application Support/fly'
+    )
   })
 })
 
@@ -19,12 +25,33 @@ describe('stopTransfersQuestion', () => {
 
   it('asks before quitting, with Cancel as the default', () => {
     expect(stopTransfersQuestion(3, 'quit')).toMatchObject({
-      message: 'Quit Fly and cancel 3 transfers?',
+      message: 'Quit FileFly and cancel 3 transfers?',
       buttons: ['Cancel', 'Quit'],
       defaultId: 0,
       cancelId: 0
     })
     expect(stopTransfersQuestion(1, 'close')?.message).toBe('Close the window and cancel 1 transfer?')
     expect(stopTransfersQuestion(1, 'close')?.buttons).toEqual(['Cancel', 'Close'])
+  })
+})
+
+describe('splash timing', () => {
+  it('shows the start screen for 6 seconds in the installed app, whatever the environment says', () => {
+    expect(splashDuration({ isPackaged: true, override: '0' })).toBe(SPLASH_DURATION_MS)
+    expect(SPLASH_DURATION_MS).toBe(6000)
+  })
+
+  it('lets unpackaged runs shorten or skip it', () => {
+    expect(splashDuration({ isPackaged: false, override: undefined })).toBe(6000)
+    expect(splashDuration({ isPackaged: false, override: '0' })).toBe(0)
+    expect(splashDuration({ isPackaged: false, override: '1500' })).toBe(1500)
+    expect(splashDuration({ isPackaged: false, override: 'soon' })).toBe(6000)
+    expect(splashDuration({ isPackaged: false, override: '999999' })).toBe(30_000)
+  })
+
+  it('waits out whatever is left of the start screen', () => {
+    expect(splashWait({ shownAt: 1_000, now: 2_500, durationMs: 4_000 })).toBe(2_500)
+    expect(splashWait({ shownAt: 1_000, now: 9_000, durationMs: 4_000 })).toBe(0)
+    expect(splashWait({ shownAt: null, now: 9_000, durationMs: 4_000 })).toBe(4_000)
   })
 })

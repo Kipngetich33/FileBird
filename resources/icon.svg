@@ -1,28 +1,78 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The FileFly bird, climbing. Its shapes match src/renderer/src/splash/bird.ts. -->
   <defs>
-    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b2433"/>
-      <stop offset="1" stop-color="#0b0f17"/>
+    <linearGradient id="ground" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#15204a"/>
+      <stop offset="0.55" stop-color="#0b1130"/>
+      <stop offset="1" stop-color="#070a1c"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="streak" gradientUnits="userSpaceOnUse" x1="-760" y1="0" x2="760" y2="0">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#a5b4fc" stop-opacity="1"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="glow" gradientUnits="userSpaceOnUse" x1="-760" y1="0" x2="760" y2="0">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#60a5fa"/>
+      <stop offset="0.7" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="core" gradientUnits="userSpaceOnUse" x1="-760" y1="0" x2="760" y2="0">
+      <stop offset="0.08" stop-color="#e0f2fe" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.75" stop-color="#e0f2fe" stop-opacity="0.76"/>
+      <stop offset="0.95" stop-color="#e0f2fe" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="0.6" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#e0f2fe"/>
     </linearGradient>
     <linearGradient id="wing" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7dd3fc"/>
-      <stop offset="1" stop-color="#0284c7"/>
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#67e8f9"/>
     </linearGradient>
-    <linearGradient id="fold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#075985"/>
+    <linearGradient id="farwing" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#312e81"/>
     </linearGradient>
+    <clipPath id="square"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
   </defs>
   <!-- macOS icon grid: an 824px rounded square centred on the 1024px canvas -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#ground)"/>
-  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
-  <!-- two panes, faint -->
-  <rect x="210" y="250" width="270" height="524" rx="36" fill="#ffffff" fill-opacity="0.05"/>
-  <rect x="544" y="250" width="270" height="524" rx="36" fill="#ffffff" fill-opacity="0.05"/>
-  <!-- the paper plane crossing from one pane to the other -->
-  <g transform="translate(512 512) rotate(-12) translate(-512 -512)">
-    <path d="M232 520 L800 300 L612 760 L512 590 Z" fill="url(#wing)"/>
-    <path d="M512 590 L800 300 L560 640 Z" fill="url(#fold)"/>
-    <path d="M512 590 L560 640 L520 700 Z" fill="#0c4a6e"/>
+  <g clip-path="url(#square)"><g transform="translate(1024 0) scale(-1 1)">
+    <circle cx="520" cy="500" r="360" fill="url(#halo)"/>
+    <g transform="translate(512 512) rotate(-60)">
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="130" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="119" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="108" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="97" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="86" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="75" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="64" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="53" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="42" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#glow)" stroke-width="31" stroke-linecap="round" stroke-opacity="0.032"/>
+      <path d="M-760 258 C-280 326 230 322 760 222" fill="none" stroke="url(#streak)" stroke-width="5" stroke-linecap="round" stroke-opacity="0.9"/>
+      <path d="M-760 330 C-300 400 270 386 760 288" fill="none" stroke="url(#streak)" stroke-width="5" stroke-linecap="round" stroke-opacity="0.675"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#streak)" stroke-width="20" stroke-linecap="round"/>
+      <path d="M-760 290 C-300 360 250 350 760 250" fill="none" stroke="url(#core)" stroke-width="7" stroke-linecap="round"/>
+    </g></g>
   </g>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#93c5fd" stroke-opacity="0.14"/>
+  <!-- soft light behind the bird (no SVG blur: it renders the transparent corners black) --><g transform="translate(1024 0) scale(-1 1)">
+  <ellipse cx="0" cy="0" rx="290" ry="165" fill="url(#halo)" transform="translate(570 488.75) rotate(-60)"/>
+  <g transform="translate(570 488.75) rotate(-60) scale(6.0) translate(-60 -38)">
+    <path d="M78 45 C70 55 57 65 37 74 C49 63 58 55 62 49 Z" fill="url(#farwing)" transform="rotate(-23.4 78 45)"/>
+    <path d="M117 35 L106 32.5 C104 27 97.5 24.5 91.5 25.5 C86 26.5 82.5 29.5 80.5 33 C72 36 60 39.5 48 43.5 L4 34 L41 47.5 L3 57 L45 51.5 C60 55 78 53.5 91 48 C98 45 103 42 106.5 38.5 Z" fill="url(#body)"/>
+    <g transform="translate(79 39) rotate(18) scale(1.1) translate(-79 -39)">
+      <path d="M77 38 C65 30 51 25 26 25 C40 30 52 37 58 44 Z" fill="url(#body)" opacity="0.85" transform="rotate(-7.2 77 38)"/>
+      <path d="M83 35 C75 20 59 8 28 2 C37 8 43 13 47 17.5 C40 16.5 33 16.5 27 17.5 C43 24 56 32 64 41.5 Z" fill="url(#wing)"/>
+    </g>
+    <circle cx="99.5" cy="31" r="1.9" fill="#0b1026"/>
+  </g></g>
 </svg>

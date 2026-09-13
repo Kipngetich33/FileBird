@@ -344,6 +344,7 @@ function ConnectedPane({
       operations={operations}
       side="remote"
       onDropEntries={onDropEntries}
+      onTransfer={onDownload}
       actions={
         <>
           <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />

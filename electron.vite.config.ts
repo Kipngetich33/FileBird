@@ -33,7 +33,11 @@ export default defineConfig({
     build: {
       outDir: 'out/renderer',
       rollupOptions: {
-        input: resolve(__dirname, 'src/renderer/index.html')
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          // The start screen, shown in its own window while the app loads.
+          splash: resolve(__dirname, 'src/renderer/splash.html')
+        }
       }
     },
     resolve: {

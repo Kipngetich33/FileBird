@@ -23,6 +23,8 @@ interface FileTableProps {
   onOpen: (entry: FileEntry) => void
   /** Rows can be dragged to the other pane (Milestone 9). */
   onDragStart?: (entry: FileEntry, event: DragEvent) => void
+  /** Right-clicking a row. */
+  onContextMenu?: (entry: FileEntry) => void
   /** The folder row a drag from the other pane is over. */
   dropTargetPath?: string | null
 }
@@ -31,7 +33,7 @@ interface FileTableProps {
 const modeOf = (event: MouseEvent): SelectMode =>
   event.shiftKey ? 'range' : (navigator.platform.startsWith('Mac') ? event.metaKey : event.ctrlKey) ? 'toggle' : 'replace'
 
-export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen, onDragStart, dropTargetPath = null }: FileTableProps): JSX.Element {
+export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen, onDragStart, onContextMenu, dropTargetPath = null }: FileTableProps): JSX.Element {
   const multiple = selectedPaths.size > 1
   return (
     <div role="grid" aria-label="Files" aria-multiselectable="true" className="@container min-w-0">
@@ -60,6 +62,7 @@ export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect
           onSelect={onSelect}
           onOpen={onOpen}
           onDragStart={onDragStart}
+          onContextMenu={onContextMenu}
         />
       ))}
     </div>
@@ -77,10 +80,11 @@ interface FileRowProps {
   onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
   onDragStart?: (entry: FileEntry, event: DragEvent) => void
+  onContextMenu?: (entry: FileEntry) => void
 }
 
 // Memoised: moving the selection re-renders the rows that change, not the whole folder.
-const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, active, onSelect, onOpen, onDragStart }: FileRowProps): JSX.Element {
+const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, active, onSelect, onOpen, onDragStart, onContextMenu }: FileRowProps): JSX.Element {
   return (
     <div
       role="row"
@@ -94,8 +98,24 @@ const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, act
         // Shift-click would otherwise select the text between rows.
         if (event.shiftKey) event.preventDefault()
       }}
-      onClick={(event) => onSelect(entry.path, modeOf(event))}
-      onDoubleClick={() => onOpen(entry)}
+      onClick={(event) => {
+        const mode = modeOf(event)
+        // A plain click opens a folder; Cmd-click and Shift-click still select it.
+        if (entry.kind === 'directory' && mode === 'replace') {
+          // The second click of a double-click would land in the folder just opened.
+          if (event.detail <= 1) onOpen(entry)
+          return
+        }
+        onSelect(entry.path, mode)
+      }}
+      onContextMenu={
+        onContextMenu === undefined
+          ? undefined
+          : (event) => {
+              event.preventDefault()
+              onContextMenu(entry)
+            }
+      }
       className={`${COLUMNS} h-7 cursor-default text-[12px] ${
         dropTarget
           ? 'bg-sky-500/30 text-zinc-50 outline outline-1 -outline-offset-1 outline-sky-400/70'

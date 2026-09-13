@@ -3,6 +3,7 @@ import { utils, type ParsedKey } from 'ssh2'
 import type { KeyInfo } from '../../shared/types/connections'
 import { AppError, errnoOf } from '../errors'
 import { hostKeyFingerprint } from '../sftp/host-keys'
+import { APP_NAME } from '../../shared/constants/app'
 
 /**
  * Private key files, read only in the main process.
@@ -37,7 +38,7 @@ async function readKeyFile(path: string): Promise<{ data: Buffer; mode: number }
     const errno = errnoOf(error)
     if (errno === 'ENOENT' || errno === 'ENOTDIR') throw new AppError('KEY_NOT_FOUND', `There's no key file at "${path}".`)
     if (errno === 'EACCES' || errno === 'EPERM') {
-      throw new AppError('KEY_UNREADABLE', `Fly can't read "${path}". Check the file's permissions.`)
+      throw new AppError('KEY_UNREADABLE', `${APP_NAME} can't read "${path}". Check the file's permissions.`)
     }
     throw error
   }
@@ -49,7 +50,7 @@ async function readKeyFile(path: string): Promise<{ data: Buffer; mode: number }
   } catch (error) {
     const errno = errnoOf(error)
     if (errno === 'EACCES' || errno === 'EPERM') {
-      throw new AppError('KEY_UNREADABLE', `Fly can't read "${path}". Check the file's permissions.`)
+      throw new AppError('KEY_UNREADABLE', `${APP_NAME} can't read "${path}". Check the file's permissions.`)
     }
     throw error
   }

@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import type { HostKeyPrompt } from '@renderer/hooks/useRemoteConnection'
 import { Dialog, Fingerprint, PRIMARY_BUTTON, SECONDARY_BUTTON } from './Dialog'
+import { APP_NAME } from '@shared/constants/app'
 
 interface HostKeyDialogProps {
   prompt: HostKeyPrompt
@@ -36,7 +37,7 @@ export function HostKeyDialog({ prompt, onTrust, onCancel }: HostKeyDialogProps)
       }
     >
       <p>
-        This is the first time Fly has connected to <span className="font-medium text-zinc-200">{target}</span>. Check
+        This is the first time {APP_NAME} has connected to <span className="font-medium text-zinc-200">{target}</span>. Check
         that this fingerprint matches the server's before trusting it.
       </p>
       <Fingerprint
@@ -48,7 +49,7 @@ export function HostKeyDialog({ prompt, onTrust, onCancel }: HostKeyDialogProps)
       <p className="text-[11px] text-zinc-500">
         On the server, <span className="font-mono">ssh-keygen -lf {hostKeyFileFor(prompt.hostKey.algorithm)}</span>{' '}
         prints it.
-        Fly will remember this key and warn you if it ever changes.
+        {APP_NAME} will remember this key and warn you if it ever changes.
       </p>
     </Dialog>
   )

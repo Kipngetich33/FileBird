@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import { APP_NAME } from '@shared/constants/app'
 interface TitleBarProps {
   /** macOS uses an inset title bar, so the content needs to clear the traffic lights. */
   isMac: boolean
@@ -13,7 +14,7 @@ export function TitleBar({ isMac, status }: TitleBarProps): JSX.Element {
       }`}
     >
       <div className="flex items-baseline gap-2.5">
-        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">Fly</span>
+        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">{APP_NAME}</span>
         <span className="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
           SFTP Client
         </span>

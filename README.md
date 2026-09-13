@@ -1,4 +1,4 @@
-# Fly
+# FileFly
 
 A cross-platform desktop SFTP client — dual-pane file management over SSH, built
 with Electron, React and TypeScript.
@@ -9,29 +9,29 @@ Targets macOS (Apple Silicon first), Windows and Linux.
 
 Builds are produced locally with electron-builder (see [Packaging](#packaging)).
 They are **not signed with a developer certificate or notarised yet**, so each
-operating system warns the first time you open Fly.
+operating system warns the first time you open FileFly.
 
 ### macOS
 
-Fly needs macOS 13 (Ventura) or later. `Fly-<version>-mac-universal.dmg` runs on
+FileFly needs macOS 13 (Ventura) or later. `FileFly-<version>-mac-universal.dmg` runs on
 both Apple Silicon and Intel; the `-arm64` / `-x64` DMGs are smaller single-CPU
 builds.
 
-1. Open the DMG and drag **Fly** to **Applications**. The DMG window also
-   contains **How to install Fly.txt** with these steps.
-2. Double-click Fly. The first time, macOS says it could not verify Fly: click
+1. Open the DMG and drag **FileFly** to **Applications**. The DMG window also
+   contains **How to install FileFly.txt** with these steps.
+2. Double-click FileFly. The first time, macOS says it could not verify FileFly: click
    **Done**.
 3. Open **System Settings → Privacy & Security**, scroll to **Security**, click
-   **Open Anyway** next to Fly, and confirm. This is needed only once.
-   On macOS 14 or earlier, right-click Fly → **Open** → **Open** does the same.
+   **Open Anyway** next to FileFly, and confirm. This is needed only once.
+   On macOS 14 or earlier, right-click FileFly → **Open** → **Open** does the same.
 4. If macOS says the app "is damaged", run
-   `xattr -dr com.apple.quarantine /Applications/Fly.app` once. The builds are
+   `xattr -dr com.apple.quarantine /Applications/FileFly.app` once. The builds are
    ad-hoc signed only, not notarised.
-5. Saved passwords and passphrases go to your login Keychain, under **Fly**.
+5. Saved passwords and passphrases go to your login Keychain, under **Fly** (FileFly's earlier name).
 
 ### Windows
 
-Run `Fly-<version>-win-x64-setup.exe`. SmartScreen warns about an unrecognised
+Run `FileFly-<version>-win-x64-setup.exe`. SmartScreen warns about an unrecognised
 app: choose **More info → Run anyway**. Credentials are stored in Windows
 Credential Manager. *(Windows builds are cross-built on macOS and not yet
 tested on Windows.)*
@@ -39,8 +39,8 @@ tested on Windows.)*
 ### Linux
 
 ```bash
-chmod +x Fly-<version>-linux-x86_64.AppImage
-./Fly-<version>-linux-x86_64.AppImage
+chmod +x FileFly-<version>-linux-x86_64.AppImage
+./FileFly-<version>-linux-x86_64.AppImage
 ```
 
 Saving passwords needs a Secret Service provider (GNOME Keyring or KWallet)
@@ -182,7 +182,7 @@ as they arrive. Folders are copied with everything inside them.
 - **The Transfers panel** lists every file: Queued, Running (with progress and
   speed), Completed, Failed or Cancelled. Three run at a time. Cancel or Retry any
   of them, or use Cancel all / Retry failed / Clear finished.
-- **If names already exist**, Fly asks once for the whole request: **Replace**
+- **If names already exist**, FileFly asks once for the whole request: **Replace**
   (folders are merged — files with the same name are replaced, nothing is
   deleted), **Keep both** (saves `name (1).ext`), **Skip** or **Cancel**. A file
   never replaces a folder.
@@ -200,14 +200,14 @@ Both panes can create folders (toolbar button or **File › New Folder**), renam
 
 - **Local deletes go to the Trash** (Recycle Bin on Windows), so they can be
   restored. If the Trash isn't available, nothing is deleted.
-- **Remote deletes are permanent**, and Fly asks first. Folders are deleted with
+- **Remote deletes are permanent**, and FileFly asks first. Folders are deleted with
   their contents; a link is removed as a link, never followed.
-- Renaming never replaces an existing item, and Fly refuses to delete or rename
+- Renaming never replaces an existing item, and FileFly refuses to delete or rename
   your home folder or any folder that contains it.
 
 ## Security notes
 
-- **Host keys** are trusted on first use: Fly shows the fingerprint before
+- **Host keys** are trusted on first use: FileFly shows the fingerprint before
   connecting, remembers the key, and refuses to connect if it ever changes.
 - **Passwords and key passphrases** are stored only in the operating system's
   keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service),

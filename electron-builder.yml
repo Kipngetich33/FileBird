@@ -1,5 +1,5 @@
 appId: com.titansoft.fly
-productName: Fly
+productName: FileFly
 copyright: Copyright © 2026 titansoft
 
 directories:
@@ -75,7 +75,7 @@ dmg:
     - x: 270
       y: 290
       type: file
-      path: resources/dmg/How to install Fly.txt
+      path: resources/dmg/How to install FileFly.txt
 
 win:
   files:

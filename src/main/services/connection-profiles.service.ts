@@ -12,6 +12,7 @@ import { type SecretKind, type SecretStore, secretAccount } from '../secrets/sec
 import type { ConnectionStorage } from '../storage/connection-storage'
 import { mapLimit } from '../utils/map-limit'
 import type { ConnectHooks } from './connection.service'
+import { APP_NAME } from '../../shared/constants/app'
 
 const log = createLogger('profiles')
 
@@ -139,7 +140,7 @@ export class ConnectionProfilesService {
           await this.options.secrets.set(account, typed.value)
           return undefined
         } catch {
-          return `Connected, but Fly couldn't save the ${kind} to the keychain.`
+          return `Connected, but ${APP_NAME} couldn't save the ${kind} to the keychain.`
         }
       }
     }

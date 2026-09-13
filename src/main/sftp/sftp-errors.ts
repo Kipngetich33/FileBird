@@ -1,4 +1,5 @@
 import { AppError, errnoOf } from '../errors'
+import { APP_NAME } from '../../shared/constants/app'
 
 /** SFTP status codes (draft-ietf-secsh-filexfer-02) that the user can act on. */
 export const SFTP_STATUS = {
@@ -80,7 +81,7 @@ export function fromConnectError(
     case 'handshake':
       return new AppError(
         'HANDSHAKE_FAILED',
-        `Couldn't agree on a secure connection with "${host}". The server may require encryption Fly doesn't support.`
+        `Couldn't agree on a secure connection with "${host}". The server may require encryption ${APP_NAME} doesn't support.`
       )
   }
 

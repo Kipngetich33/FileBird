@@ -1,7 +1,7 @@
 {
   "name": "fly",
   "version": "0.1.0",
-  "description": "Fly \u2014 a cross-platform desktop SFTP client",
+  "description": "FileFly \u2014 a cross-platform desktop SFTP client",
   "desktopName": "fly.desktop",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
@@ -11,10 +11,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/electron-vite.mjs dev",
     "build": "npm run typecheck && electron-vite build",
-    "preview": "electron-vite preview",
-    "start": "electron-vite preview",
+    "preview": "node scripts/electron-vite.mjs preview",
+    "start": "node scripts/electron-vite.mjs preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",

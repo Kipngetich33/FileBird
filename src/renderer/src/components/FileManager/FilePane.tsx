@@ -14,6 +14,8 @@ import type { AppErrorPayload } from '@shared/types/errors'
 import type { FileEntry } from '@shared/types/files'
 import { ConfirmDialog } from '@renderer/components/Connection/ConfirmDialog'
 import type { DirectoryState } from '@renderer/hooks/useDirectory'
+import { appService } from '@renderer/services/app.service'
+import { fileContextMenu } from '@renderer/utils/context-menu'
 import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type DraggedEntry } from '@renderer/utils/drag'
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
 import { NameDialog } from './NameDialog'
@@ -48,10 +50,18 @@ interface FilePaneProps {
   side: DragSide
   /** Rows dragged in from the other pane, dropped into `destination` (Milestone 9). */
   onDropEntries?: (source: DragSide, entries: DraggedEntry[], destination: string) => void
+  /** Upload (local) or Download (remote) chosen from the right-click menu. */
+  onTransfer?: (entries: FileEntry[]) => void
+  /** False while a transfer can't start, e.g. the local pane with no server connected. */
+  canTransfer?: boolean
 }
 
 /**
  * One file browser pane: toolbar, path, listing and its own status footer.
+ *
+ * Mouse: a click opens a folder or selects a file; Cmd-click (Ctrl on Windows
+ * and Linux) and Shift-click select; right-click selects the row and shows a
+ * menu of what can be done with it.
  *
  * Keyboard (spec section 14): ↑/↓ select (Shift extends), Enter opens,
  * Backspace goes to the parent folder, F5 refreshes, Tab switches to the other
@@ -71,7 +81,9 @@ export function FilePane({
   onDismissNotice,
   operations,
   side,
-  onDropEntries
+  onDropEntries,
+  onTransfer,
+  canTransfer = true
 }: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
@@ -241,6 +253,55 @@ export function FilePane({
     [open]
   )
 
+  /**
+   * Right-click: a row that isn't already selected becomes the selection, and
+   * the menu acts on the selection; on the empty part of the list, on the folder.
+   */
+  async function showContextMenu(entry: FileEntry | null): Promise<void> {
+    if (listing === null) return
+    let targets: FileEntry[] = []
+    if (entry !== null) {
+      targets = selectedPaths.has(entry.path) ? selectedEntries : [entry]
+      if (!selectedPaths.has(entry.path)) select(entry.path)
+    }
+    const action = await appService.showContextMenu(
+      fileContextMenu({
+        side,
+        entries: targets,
+        canTransfer: onTransfer !== undefined && canTransfer,
+        canModify: operations !== undefined,
+        trash: operations?.trash ?? false
+      })
+    )
+    const first = targets[0]
+    switch (action) {
+      case 'open':
+        if (first !== undefined) openEntry(first)
+        return
+      case 'upload':
+      case 'download':
+        onTransfer?.(targets)
+        return
+      case 'new-folder':
+        startNewFolder()
+        return
+      case 'rename':
+        if (operations === undefined || first === undefined) return
+        setNameError(null)
+        setOperation({ kind: 'rename', entry: first })
+        return
+      case 'move-to-trash':
+      case 'delete':
+        if (operations !== undefined && targets.length > 0) setOperation({ kind: 'delete', entries: targets })
+        return
+      case 'refresh':
+        void refresh()
+        return
+      case null:
+        return
+    }
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
     // Tab from the listing itself switches panes; from toolbar buttons it stays
     // ordinary tabbing, so every control remains reachable by keyboard.
@@ -398,7 +459,17 @@ export function FilePane({
           </div>
         )}
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          data-testid="file-list"
+          className="min-h-0 flex-1 overflow-y-auto"
+          onContextMenu={(event) => {
+            // A row's own menu has already been handled.
+            if (event.defaultPrevented) return
+            event.preventDefault()
+            void showContextMenu(null)
+          }}
+        >
           {listing !== null && (
             <FileTable
               entries={entries}
@@ -408,6 +479,7 @@ export function FilePane({
               onSelect={select}
               onOpen={openEntry}
               onDragStart={startDrag}
+              onContextMenu={(entry) => void showContextMenu(entry)}
               dropTargetPath={dropDestination !== null && dropDestination !== listing.path ? dropDestination : null}
             />
           )}

@@ -1,6 +1,7 @@
 import { useState, type JSX } from 'react'
 import type { HostKeyChange } from '@renderer/hooks/useRemoteConnection'
 import { DANGER_BUTTON, Dialog, Fingerprint, SECONDARY_BUTTON } from './Dialog'
+import { APP_NAME } from '@shared/constants/app'
 
 interface HostKeyChangedDialogProps {
   change: HostKeyChange
@@ -48,7 +49,7 @@ export function HostKeyChangedDialog({ change, onForget, onClose }: HostKeyChang
         <span className="font-medium text-zinc-200">{target}</span> presented a different key from the one you trusted
         before. Someone may be intercepting the connection, or the server may have been reinstalled.
       </p>
-      <p className="text-zinc-300">Fly did not connect, and your password was not sent.</p>
+      <p className="text-zinc-300">{APP_NAME} did not connect, and your password was not sent.</p>
       <Fingerprint label="Trusted before" algorithm={change.saved.algorithm} fingerprint={change.saved.fingerprint} testId="host-key-saved" />
       <Fingerprint label="Presented now" algorithm={change.offered.algorithm} fingerprint={change.offered.fingerprint} testId="host-key-offered" />
       {confirming && (

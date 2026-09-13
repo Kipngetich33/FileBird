@@ -2,13 +2,14 @@ import { AsyncEntry } from '@napi-rs/keyring'
 import { AppError } from '../errors'
 import { createLogger } from '../logger'
 import type { SecretStore } from './secret-store'
+import { APP_NAME } from '../../shared/constants/app'
 
 const log = createLogger('secrets')
 
 function unavailable(action: string, error: unknown): AppError {
   // The account name is safe to log; the secret itself never reaches this function.
   log.error('Keychain operation failed', { action, error: error instanceof Error ? error.message : String(error) })
-  return new AppError('KEYCHAIN_UNAVAILABLE', "Fly couldn't use the system keychain. Your password or passphrase wasn't saved.")
+  return new AppError('KEYCHAIN_UNAVAILABLE', `${APP_NAME} couldn't use the system keychain. Your password or passphrase wasn't saved.`)
 }
 
 /**

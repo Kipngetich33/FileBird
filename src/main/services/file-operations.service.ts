@@ -7,6 +7,7 @@ import { createLogger } from '../logger'
 import type { SftpProvider } from '../sftp/sftp-provider'
 import { mapLimit } from '../utils/map-limit'
 import { isProtectedPath } from './protected-paths'
+import { APP_NAME } from '../../shared/constants/app'
 
 const log = createLogger('file-operations')
 
@@ -27,7 +28,7 @@ export interface FileOperationsOptions {
 type Verb = 'create' | 'rename' | 'delete'
 
 const notAllowed = (): AppError =>
-  new AppError('NOT_ALLOWED', "Fly won't delete or rename your home folder, or a folder that contains it.")
+  new AppError('NOT_ALLOWED', `${APP_NAME} won't delete or rename your home folder, or a folder that contains it.`)
 
 /** Operation-specific wording for errors whose generic message is about browsing. */
 function reword(error: unknown, verb: Verb): unknown {

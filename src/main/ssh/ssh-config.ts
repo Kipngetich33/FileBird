@@ -7,6 +7,7 @@ import type { ImportCandidate, ImportPreview } from '../../shared/types/connecti
 import { AppError, errnoOf } from '../errors'
 import { createLogger } from '../logger'
 import { mapLimit } from '../utils/map-limit'
+import { APP_NAME } from '../../shared/constants/app'
 
 const log = createLogger('ssh-config')
 
@@ -262,7 +263,7 @@ export class SshConfigImporter {
     const context: TokenContext = { ...this.options, alias, host: host.hostname, remoteUser: host.user, port: host.port }
     const expand = (value: string): string => {
       const { path, unsupported } = expandIdentityPath(value, context)
-      if (unsupported) warnings.push(`The key path "${value}" uses a token Fly can't expand.`)
+      if (unsupported) warnings.push(`The key path "${value}" uses a token ${APP_NAME} can't expand.`)
       return path
     }
 
@@ -285,7 +286,7 @@ export class SshConfigImporter {
     }
 
     if (host.proxyJump !== null) {
-      warnings.push(`Connects through a jump host (${host.proxyJump}), which Fly doesn't support yet.`)
+      warnings.push(`Connects through a jump host (${host.proxyJump}), which ${APP_NAME} doesn't support yet.`)
     }
 
     return {

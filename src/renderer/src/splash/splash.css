@@ -1,0 +1,98 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  position: absolute;
+  inset: 20px;
+  border-radius: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 55% at 78% 18%, rgba(59, 130, 246, 0.12), transparent 70%),
+    radial-gradient(ellipse 55% 50% at 15% 82%, rgba(99, 102, 241, 0.1), transparent 70%),
+    linear-gradient(160deg, #0e1633 0%, #080d20 55%, #060917 100%);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: appear 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+#stream {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.brand {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #eef2ff;
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 18px rgba(96, 165, 250, 0.35);
+}
+
+.logo {
+  width: 46px;
+  height: 31px;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.55));
+}
+
+#status {
+  margin: 0;
+  color: #a5b4fc;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+#bar {
+  width: 236px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+#fill {
+  width: 4%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}

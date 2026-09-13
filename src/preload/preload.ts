@@ -10,6 +10,7 @@ import type {
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
 import type { DeleteOutcome, FileTarget } from '../shared/types/file-operations'
+import type { ContextMenuAction, ContextMenuItem } from '../shared/types/context-menu'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
 import type { StartTransferOutcome, StartTransferRequest, TransferJob, TransferQueueUpdate } from '../shared/types/transfers'
 import type { SystemVersions } from '../shared/types/system'
@@ -32,7 +33,9 @@ const api = {
       return () => {
         ipcRenderer.removeListener(IPC_EVENTS.MENU_COMMAND, forward)
       }
-    }
+    },
+    /** Shows a native right-click menu of these actions; resolves with the one chosen, or null. */
+    showContextMenu: (items: ContextMenuItem[]): Promise<ContextMenuAction | null> => ipcRenderer.invoke(IPC.APP_SHOW_CONTEXT_MENU, items)
   },
   system: {
     getVersion: (): Promise<SystemVersions> => ipcRenderer.invoke(IPC.SYSTEM_GET_VERSION)

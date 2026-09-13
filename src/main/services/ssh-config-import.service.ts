@@ -3,6 +3,7 @@ import { AppError } from '../errors'
 import { createLogger } from '../logger'
 import type { SshConfigImporter } from '../ssh/ssh-config'
 import type { ConnectionProfilesService } from './connection-profiles.service'
+import { APP_NAME } from '../../shared/constants/app'
 
 const log = createLogger('ssh-config')
 
@@ -27,7 +28,7 @@ export class SshConfigImportService {
   async import(aliases: string[], allowCommands: boolean): Promise<ConnectionSummary[]> {
     const preview = await this.preview(allowCommands)
     if (preview.status === 'needs-consent') {
-      throw new AppError('INVALID_INPUT', 'Confirm that Fly may run the commands in your SSH config first.')
+      throw new AppError('INVALID_INPUT', `Confirm that ${APP_NAME} may run the commands in your SSH config first.`)
     }
     if (preview.status === 'no-config') {
       throw new AppError('SSH_CONFIG_UNAVAILABLE', `There's no SSH config at ${preview.configPath}.`)

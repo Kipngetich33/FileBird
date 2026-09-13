@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { IpcChannel } from '../../shared/constants/channels'
 import { AppError } from '../errors'
 import { createLogger } from '../logger'
@@ -16,9 +16,17 @@ export function handle<TResult>(
   channel: IpcChannel,
   handler: (...args: unknown[]) => TResult | Promise<TResult>
 ): void {
-  ipcMain.handle(channel, async (_event, ...args: unknown[]) => {
+  handleWithSender(channel, (_sender, ...args) => handler(...args))
+}
+
+/** Like `handle`, for the few handlers that need the calling page, e.g. to place a menu on its window. */
+export function handleWithSender<TResult>(
+  channel: IpcChannel,
+  handler: (sender: WebContents, ...args: unknown[]) => TResult | Promise<TResult>
+): void {
+  ipcMain.handle(channel, async (event, ...args: unknown[]) => {
     try {
-      return await handler(...args)
+      return await handler(event.sender, ...args)
     } catch (error) {
       if (error instanceof AppError) {
         log.warn('Rejected IPC call', { channel, code: error.code })

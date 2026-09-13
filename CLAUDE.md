@@ -46,9 +46,13 @@ Packaging (M10): `npm run build:mac|win|linux` → `release/` (DMGs arm64 + x64,
 NSIS x64, AppImage x64); ad-hoc signed only, fuses flipped, production CSP;
 `npm run verify:package` checks a build and runs the x64 `.app` against a test
 server. Asks before quitting/closing with active transfers.
-Verified by `npm test` (390 unit), `npm run test:integration` (62: real OpenSSH,
-Keychain, `ssh`), `npm run smoke` (112 checks driving the real app) and
-`npm run verify:package` (15 checks on the x64 DMG's app).
+After M10 (user requests, 2026-09-14): the product is named **FileFly**; a 6-second
+animated start screen (`splash-window.ts`, `renderer/splash.html`) floats over other
+apps, then restores the Dock icon and menu bar; a bird Dock icon; a plain click opens
+a folder and right-click shows a native context menu.
+Verified by `npm test` (417 unit), `npm run test:integration` (62: real OpenSSH,
+Keychain, `ssh`), `npm run smoke` (122 checks driving the real app) and
+`npm run verify:package` (15 checks on the packaged app).
 
 Next: **the user's review** of M6–M10. Not done without their explicit go-ahead:
 Developer ID signing/notarisation, publishing, importing their real
@@ -221,6 +225,15 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   defaults to false (probed); it's now pinned, and `will-navigate` only allows
   the app's own URL (it used to allow every `file:` URL).
 
+## Testing gotchas added after M10
+
+- **Native context menus can't be driven over CDP.** Smoke replaces
+  `Menu.prototype.popup` through the main-process inspector on every launch: it
+  records each menu's labels and clicks the item named by `app.contextMenu(selector, pick)`.
+- **CDP `clickCount` sets `event.detail`**, so a double-click whose second click
+  arrives after the new listing renders is testable (and was mutation-checked).
+- **smoke's `selectRow` right-clicks folders**, since a plain click now opens them.
+
 ## Testing gotchas added in M10
 
 - **Node won't let a process exit while a debugger is attached.** Quitting the
@@ -244,7 +257,8 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 ## Commands
 
 ```bash
-npm run dev               # Electron + Vite, hot reload
+npm run dev               # Electron + Vite, hot reload (dev/start/preview go through scripts/electron-vite.mjs: on macOS
+                          # they run a FileFly-named copy of Electron.app in node_modules/.cache, so the Dock says FileFly)
 npm run build             # typecheck, then build main/preload/renderer
 npm run typecheck         # both TS projects
 npm test                  # Vitest unit tests (src/**/*.test.ts)
@@ -254,7 +268,7 @@ npm run smoke             # CDP (+ main-process inspector) end-to-end test on th
                           # SMOKE_SCREENSHOT_DIR=<dir> also saves screenshots
 npm run test-server -- up # a local OpenSSH server for trying the app by hand (also: status, down)
 npm run build:mac         # DMGs (arm64 + x64) → release/   (build:win → NSIS x64, build:linux → AppImage x64)
-npm run verify:package -- release/mac/Fly.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
+npm run verify:package -- release/mac/FileFly.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
 ```
 
 ## Architecture
@@ -330,6 +344,14 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 
 ### Decisions taken — do not re-litigate
 
+- **The product is called FileFly** (user request, 2026-09-14): `APP_NAME` in
+  `src/shared/constants/app.ts` for every name shown in code, plus `productName` in
+  `electron-builder.yml`, the page `<title>`, README and the DMG's install notes.
+  **Internal identifiers keep "fly" on purpose**: app id `com.titansoft.fly`, the
+  installed app's data folder `fly` (pinned in `userDataFolder`, since `app.setName`
+  would otherwise move it), keychain namespaces `Fly` / `Fly (development)`,
+  `.fly-part-` temp names, drag types and `fly.layout.v1`.
+
 - **electron-vite** over Electron Forge: its layout already matches the spec's
   main/preload/renderer split.
 - **`sandbox: true`** forces a CJS preload, which is why `package.json` has no
@@ -380,9 +402,15 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   connection to the same host/port/user. History is in memory (1,000 finished).
 - **Still no React Context (M7 revisit):** the queue is a `useTransferQueue` hook in
   `MainPage`, batching updates per animation frame; panes get props.
-- **File operations (M8) use small dialogs, not inline row editing, and there is
-  no context menu** (not in spec; the File menu and keys reach everything).
+- **File operations (M8) use small dialogs, not inline row editing.**
   Operations are passed to `FilePane` as a per-side `PaneOperations` object.
+- **Clicks (user request, 2026-09-14, replacing spec §14's double-click):** a plain
+  click opens a folder (clicks with `event.detail >= 2` are ignored, so a habitual
+  double-click doesn't open the folder that lands under the pointer); Cmd/Shift-click
+  select; **right-click selects the row and shows a native context menu** (Open,
+  Upload/Download, New Folder, Rename…, Move to Trash…/Delete…, Refresh). The renderer
+  sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
+  validates the request and pops up `Menu`. Moving items is still not implemented.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer. Verified enforced in the packaged app (M10).

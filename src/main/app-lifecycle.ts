@@ -1,14 +1,18 @@
 import { join } from 'node:path'
+import { APP_NAME } from '../shared/constants/app'
 
 /**
- * Where unpackaged runs keep their app data (Milestone 10 plan D6), matching the
+ * Where app data lives. The installed app has always used a folder named after
+ * the npm package ("fly"), which Electron derives from the app's name; it is
+ * pinned so that renaming the app keeps saved connections and trusted host keys.
+ * Unpackaged runs keep their own (Milestone 10 plan D6), matching the
  * "Fly (development)" keychain namespace, so a developer's saved connections
  * never appear in the installed app with secrets it can't read. An explicit
- * --user-data-dir (smoke tests, dev checks) always wins. Null: keep the default.
+ * --user-data-dir (smoke tests, dev checks) always wins: null, keep it.
  */
-export function developmentUserData(options: { isPackaged: boolean; hasUserDataSwitch: boolean; appData: string }): string | null {
-  if (options.isPackaged || options.hasUserDataSwitch) return null
-  return join(options.appData, 'Fly (development)')
+export function userDataFolder(options: { isPackaged: boolean; hasUserDataSwitch: boolean; appData: string }): string | null {
+  if (options.hasUserDataSwitch) return null
+  return join(options.appData, options.isPackaged ? 'fly' : 'Fly (development)')
 }
 
 export interface StopTransfersQuestion {
@@ -29,7 +33,7 @@ export function stopTransfersQuestion(activeTransfers: number, action: 'quit' | 
   const what = activeTransfers === 1 ? '1 transfer' : `${activeTransfers} transfers`
   return {
     type: 'warning',
-    message: action === 'quit' ? `Quit Fly and cancel ${what}?` : `Close the window and cancel ${what}?`,
+    message: action === 'quit' ? `Quit ${APP_NAME} and cancel ${what}?` : `Close the window and cancel ${what}?`,
     detail:
       action === 'quit'
         ? `${activeTransfers === 1 ? 'It is' : 'They are'} still queued or running. Partly transferred files are removed.`
@@ -38,4 +42,23 @@ export function stopTransfersQuestion(activeTransfers: number, action: 'quit' | 
     defaultId: 0,
     cancelId: 0
   }
+}
+
+/** How long the start screen shows before the main window (plan: "dances around" for a few seconds). */
+export const SPLASH_DURATION_MS = 6000
+
+/**
+ * The start screen's duration. Unpackaged builds accept FLY_SPLASH_MS (0 turns
+ * it off) so development restarts can skip it; the installed app always shows it.
+ */
+export function splashDuration(options: { isPackaged: boolean; override: string | undefined }): number {
+  if (options.isPackaged || options.override === undefined || options.override.trim() === '') return SPLASH_DURATION_MS
+  const value = Number(options.override)
+  return Number.isFinite(value) && value >= 0 ? Math.min(value, 30_000) : SPLASH_DURATION_MS
+}
+
+/** How much longer the start screen should stay, given when it appeared (null: not yet). */
+export function splashWait(options: { shownAt: number | null; now: number; durationMs: number }): number {
+  if (options.shownAt === null) return options.durationMs
+  return Math.max(0, options.durationMs - (options.now - options.shownAt))
 }

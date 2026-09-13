@@ -2,9 +2,11 @@ import { app, BrowserWindow, dialog, Menu, shell, type OpenDialogOptions } from 
 import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { APP_NAME } from '../shared/constants/app'
 import { IPC_EVENTS } from '../shared/constants/channels'
-import { developmentUserData, stopTransfersQuestion } from './app-lifecycle'
+import { splashDuration, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
+import { registerContextMenuIpc } from './ipc/context-menu.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
 import { buildApplicationMenu } from './menu'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
@@ -24,17 +26,21 @@ import { SshConfigImporter } from './ssh/ssh-config'
 import { TransferQueue } from './transfers/queue'
 import { ConnectionStorage } from './storage/connection-storage'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
+import { openSplash } from './splash-window'
 import { logger } from './logger'
 
 const isDev = !app.isPackaged
 
-// Before anything touches app data: unpackaged runs keep their own (plan D6).
-const developmentData = developmentUserData({
+// Before anything touches app data, and before the name changes: Electron names
+// the data folder after the app, so pin it (unpackaged runs keep their own, plan D6).
+const dataFolder = userDataFolder({
   isPackaged: app.isPackaged,
   hasUserDataSwitch: app.commandLine.hasSwitch('user-data-dir'),
   appData: app.getPath('appData')
 })
-if (developmentData !== null) app.setPath('userData', developmentData)
+if (dataFolder !== null) app.setPath('userData', dataFolder)
+// The name in the macOS app menu (About, Hide, Quit); package.json's "fly" otherwise.
+app.setName(APP_NAME)
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
 let connections: ConnectionService | null = null
@@ -57,14 +63,15 @@ const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FL
 const trashDirectory = !app.isPackaged ? process.env['FLY_DEV_TRASH_DIR'] : undefined
 const trash = trashDirectory ? devTrash(trashDirectory) : (path: string): Promise<void> => shell.trashItem(path)
 
-function createMainWindow(): BrowserWindow {
+/** `reveal` decides when the window appears; by default as soon as it has painted. */
+function createMainWindow(reveal: (window: BrowserWindow) => void = (window) => window.show()): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
     minHeight: 600,
     show: false,
-    title: 'Fly',
+    title: APP_NAME,
     backgroundColor: '#0b0d12',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 18 },
@@ -82,7 +89,7 @@ function createMainWindow(): BrowserWindow {
   })
 
   // Avoid the white flash: hold the window back until React has painted.
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => reveal(window))
 
   // Closing the window disconnects, so transfers still running would be cancelled: ask first.
   let closeConfirmed = false
@@ -142,6 +149,7 @@ void app.whenReady().then(() => {
     )
   )
   registerSystemIpc()
+  registerContextMenuIpc()
   registerLocalFilesIpc(appHome)
 
   const userData = app.getPath('userData')
@@ -192,7 +200,16 @@ void app.whenReady().then(() => {
     })
   )
 
-  createMainWindow()
+  // Unpackaged, the Dock would show Electron's own icon; the packaged app's icon comes from its bundle.
+  const showDevDockIcon = (): void => {
+    if (isDev && process.platform === 'darwin') app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
+  }
+  showDevDockIcon()
+
+  // The FileFly start screen shows while the main window loads out of sight.
+  const splashMs = splashDuration({ isPackaged: app.isPackaged, override: process.env['FLY_SPLASH_MS'] })
+  const splash = splashMs > 0 ? openSplash({ rendererUrl: isDev ? rendererUrl : undefined, durationMs: splashMs }) : null
+  createMainWindow(splash === null ? undefined : (window) => void splash.handOff(window).then(showDevDockIcon))
 
   logger.info('Application ready', {
     mode: isDev ? 'development' : 'production',

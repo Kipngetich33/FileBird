@@ -178,6 +178,8 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
               operations={localOperations}
               side="local"
               onDropEntries={(source, entries, destination) => transferEntries(source, entries, destination)}
+              onTransfer={(entries) => transferEntries('local', entries)}
+              canTransfer={remote.connection !== null}
               actions={
                 <TransferButton
                   direction="upload"

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type JSX } from 'react'
 import type { ConnectionInput, KeyInfo } from '@shared/types/connections'
 import type { AppErrorPayload } from '@shared/types/errors'
 import { connectionsService } from '@renderer/services/connections.service'
+import { APP_NAME } from '@shared/constants/app'
 
 interface ConnectionFormProps {
   mode: 'new' | 'edit'
@@ -169,7 +170,7 @@ export function ConnectionForm(props: ConnectionFormProps): JSX.Element {
                 {inspection.message}
               </p>
             )}
-            <p className="text-[11px] text-zinc-600">Fly reads the key file only when connecting. If it has a passphrase, you'll be asked for it.</p>
+            <p className="text-[11px] text-zinc-600">{APP_NAME} reads the key file only when connecting. If it has a passphrase, you'll be asked for it.</p>
           </div>
         ) : (
           <p className="text-[11px] text-zinc-600">You'll be asked for the password when connecting.</p>

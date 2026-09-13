@@ -8,7 +8,7 @@
 // Windows / Linux (the unpacked folder electron-builder leaves in release/):
 // static checks only — fuses, the keychain binary, executable format.
 //
-//   npm run verify:package -- release/mac/Fly.app        # default on an Intel Mac
+//   npm run verify:package -- release/mac/FileFly.app        # default on an Intel Mac
 //   npm run verify:package -- release/win-unpacked
 //   npm run verify:package -- release/linux-unpacked
 import { execFile, spawn } from 'node:child_process'
@@ -28,9 +28,9 @@ const q = (value) => JSON.stringify(value)
 const DEBUG_PORT = 9261
 const INSPECT_PORT = 9263
 
-const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'Fly.app')
-const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'Fly.exe')) ? 'win32' : 'linux'
-const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'Fly') : join(appPath, platform === 'win32' ? 'Fly.exe' : 'fly')
+const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'FileFly.app')
+const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'FileFly.exe')) ? 'win32' : 'linux'
+const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'FileFly') : join(appPath, platform === 'win32' ? 'FileFly.exe' : 'fly')
 const unpacked =
   platform === 'darwin'
     ? join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
@@ -176,7 +176,7 @@ try {
       for (let i = 0; i < 80 && !page; i++) {
         page = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`)
           .then((response) => response.json())
-          .then((targets) => targets.find((target) => target.type === 'page'))
+          .then((targets) => targets.find((target) => target.type === 'page' && !target.url.includes('splash.html')))
           .catch(() => undefined)
         if (!page) await sleep(250)
       }
