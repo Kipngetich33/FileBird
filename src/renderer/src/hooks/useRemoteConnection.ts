@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConnectOutcome, ConnectRequest, ConnectionInfo } from '@shared/types/connection'
+import type { ConnectOutcome, ConnectionInfo } from '@shared/types/connection'
+import type { ConnectionInput, ConnectionSummary, SecretEntry } from '@shared/types/connections'
 import type { AppErrorPayload } from '@shared/types/errors'
+import { connectionsService } from '@renderer/services/connections.service'
 import { sftpService } from '@renderer/services/sftp.service'
 
 export type HostKeyPrompt = Extract<ConnectOutcome, { status: 'host-key-unknown' }>
 export type HostKeyChange = Extract<ConnectOutcome, { status: 'host-key-changed' }>
 
-/** What the connect form is pre-filled with. Never includes the password. */
-export interface ConnectTarget {
-  host: string
-  port: number
-  username: string
+/** What is being connected: a saved profile, or form input that isn't saved. */
+export type ConnectTarget = { kind: 'saved'; profile: ConnectionSummary } | { kind: 'unsaved'; input: ConnectionInput }
+
+export interface SecretRequest {
+  target: ConnectTarget
+  kind: 'password' | 'passphrase'
+  reason: 'not-saved' | 'rejected'
 }
 
 type Phase =
   | { name: 'idle' }
   | { name: 'connecting' }
+  | { name: 'secret-required'; request: SecretRequest }
   | { name: 'confirm-host-key'; prompt: HostKeyPrompt }
   | { name: 'host-key-changed'; change: HostKeyChange }
   | { name: 'connected'; connection: ConnectionInfo }
@@ -23,24 +28,32 @@ type Phase =
 export interface RemoteConnectionState {
   phase: Phase['name']
   connection: ConnectionInfo | null
+  secretRequest: SecretRequest | null
   hostKeyPrompt: HostKeyPrompt | null
   hostKeyChange: HostKeyChange | null
   error: AppErrorPayload | null
   notice: string | null
   lastTarget: ConnectTarget | null
-  connect: (request: ConnectRequest) => Promise<void>
+  connectSaved: (profile: ConnectionSummary) => Promise<void>
+  connectUnsaved: (input: ConnectionInput) => Promise<void>
+  submitSecret: (secret: SecretEntry) => Promise<void>
+  cancelSecret: () => void
   trustHostKey: () => Promise<void>
   cancelHostKey: () => void
   forgetChangedHostKey: () => Promise<void>
   dismissHostKeyChange: () => void
   disconnect: () => Promise<void>
   dismissError: () => void
+  dismissNotice: () => void
 }
+
+const authTypeOf = (target: ConnectTarget | null): string | undefined =>
+  target === null ? undefined : target.kind === 'saved' ? target.profile.auth.type : target.input.auth.type
 
 /**
  * The remote side's connection state, driven by the main process, which owns
- * the actual connection (spec section 16). Holds a connection id, never the
- * password: that goes to the main process once, inside the connect request.
+ * the connection and every secret (spec section 16). The renderer holds a
+ * connection id; a typed password or passphrase passes through once.
  */
 export function useRemoteConnection(): RemoteConnectionState {
   const [phase, setPhase] = useState<Phase>({ name: 'idle' })
@@ -61,7 +74,7 @@ export function useRemoteConnection(): RemoteConnectionState {
     []
   )
 
-  const settle = useCallback(async (attempt: () => Promise<ConnectOutcome>) => {
+  const settle = useCallback(async (attempt: () => Promise<ConnectOutcome>, target: ConnectTarget | null) => {
     setError(null)
     setNotice(null)
     setPhase({ name: 'connecting' })
@@ -70,6 +83,7 @@ export function useRemoteConnection(): RemoteConnectionState {
       switch (outcome.status) {
         case 'connected':
           setPhase({ name: 'connected', connection: outcome.connection })
+          if (outcome.notice !== undefined) setNotice(outcome.notice)
           break
         case 'host-key-unknown':
           setPhase({ name: 'confirm-host-key', prompt: outcome })
@@ -77,26 +91,56 @@ export function useRemoteConnection(): RemoteConnectionState {
         case 'host-key-changed':
           setPhase({ name: 'host-key-changed', change: outcome })
           break
+        case 'secret-required':
+          if (target === null) {
+            setPhase({ name: 'idle' })
+            break
+          }
+          setPhase({ name: 'secret-required', request: { target, kind: outcome.kind, reason: outcome.reason } })
+          break
       }
     } catch (cause) {
-      setError(cause as AppErrorPayload)
+      const failure = cause as AppErrorPayload
+      // A password rejected after the host key was trusted: ask again rather than dead-end.
+      if (failure.code === 'AUTH_FAILED' && target !== null && authTypeOf(target) === 'password') {
+        setPhase({ name: 'secret-required', request: { target, kind: 'password', reason: 'rejected' } })
+        return
+      }
+      setError(failure)
       setPhase({ name: 'idle' })
     }
   }, [])
 
-  const connect = useCallback(
-    (request: ConnectRequest) => {
-      setLastTarget({ host: request.host, port: request.port, username: request.username })
-      return settle(() => sftpService.connect(request))
+  const attempt = useCallback(
+    (target: ConnectTarget, secret?: SecretEntry) => {
+      setLastTarget(target)
+      return settle(
+        () =>
+          target.kind === 'saved'
+            ? connectionsService.connect(target.profile.id, secret)
+            : connectionsService.connectUnsaved(target.input, secret),
+        target
+      )
     },
     [settle]
+  )
+
+  const connectSaved = useCallback((profile: ConnectionSummary) => attempt({ kind: 'saved', profile }), [attempt])
+  const connectUnsaved = useCallback((input: ConnectionInput) => attempt({ kind: 'unsaved', input }), [attempt])
+
+  const submitSecret = useCallback(
+    async (secret: SecretEntry) => {
+      if (phase.name !== 'secret-required') return
+      await attempt(phase.request.target, secret)
+    },
+    [phase, attempt]
   )
 
   const trustHostKey = useCallback(async () => {
     if (phase.name !== 'confirm-host-key') return
     const { token } = phase.prompt
-    await settle(() => sftpService.trustHostKeyAndConnect(token))
-  }, [phase, settle])
+    await settle(() => sftpService.trustHostKeyAndConnect(token), lastTarget)
+  }, [phase, settle, lastTarget])
 
   const forgetChangedHostKey = useCallback(async () => {
     if (phase.name !== 'host-key-changed') return
@@ -114,6 +158,7 @@ export function useRemoteConnection(): RemoteConnectionState {
     if (phase.name !== 'connected') return
     const { id } = phase.connection
     setPhase({ name: 'idle' })
+    setNotice(null)
     try {
       await sftpService.disconnect(id)
     } catch (cause) {
@@ -121,22 +166,27 @@ export function useRemoteConnection(): RemoteConnectionState {
     }
   }, [phase])
 
-  const backToForm = useCallback(() => setPhase({ name: 'idle' }), [])
+  const backToIdle = useCallback(() => setPhase({ name: 'idle' }), [])
 
   return {
     phase: phase.name,
     connection: phase.name === 'connected' ? phase.connection : null,
+    secretRequest: phase.name === 'secret-required' ? phase.request : null,
     hostKeyPrompt: phase.name === 'confirm-host-key' ? phase.prompt : null,
     hostKeyChange: phase.name === 'host-key-changed' ? phase.change : null,
     error,
     notice,
     lastTarget,
-    connect,
+    connectSaved,
+    connectUnsaved,
+    submitSecret,
+    cancelSecret: backToIdle,
     trustHostKey,
-    cancelHostKey: backToForm,
+    cancelHostKey: backToIdle,
     forgetChangedHostKey,
-    dismissHostKeyChange: backToForm,
+    dismissHostKeyChange: backToIdle,
     disconnect,
-    dismissError: useCallback(() => setError(null), [])
+    dismissError: useCallback(() => setError(null), []),
+    dismissNotice: useCallback(() => setNotice(null), [])
   }
 }

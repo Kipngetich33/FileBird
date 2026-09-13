@@ -1,4 +1,4 @@
-import type { ConnectOutcome, ConnectRequest, ConnectionClosedEvent } from '@shared/types/connection'
+import type { ConnectOutcome, ConnectionClosedEvent } from '@shared/types/connection'
 import type { DirectoryListing } from '@shared/types/files'
 import { toAppError } from './errors'
 
@@ -10,10 +10,8 @@ async function call<T>(invoke: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Renderer-side wrapper around the bridged SFTP API. Connections themselves live in the main process. */
+/** Live remote connections. Connecting itself starts in connections.service. */
 export const sftpService = {
-  connect: (request: ConnectRequest): Promise<ConnectOutcome> => call(() => window.api.sftp.connect(request)),
-
   trustHostKeyAndConnect: (token: string): Promise<ConnectOutcome> =>
     call(() => window.api.sftp.trustHostKeyAndConnect(token)),
 

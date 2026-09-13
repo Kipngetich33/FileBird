@@ -10,6 +10,9 @@ interface FilePaneProps {
   directory: DirectoryState
   /** Extra header controls, e.g. Disconnect on the remote pane. */
   actions?: ReactNode
+  /** A non-fatal message, such as a secret that couldn't be saved. */
+  notice?: string | null
+  onDismissNotice?: () => void
 }
 
 /**
@@ -18,7 +21,7 @@ interface FilePaneProps {
  * Keyboard (spec section 14): ↑/↓ select, Enter opens, Backspace goes to the
  * parent folder, F5 refreshes. Delete and F2 arrive with file operations (M8).
  */
-export function FilePane({ title, subtitle, directory, actions }: FilePaneProps): JSX.Element {
+export function FilePane({ title, subtitle, directory, actions, notice, onDismissNotice }: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, loading, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, dismissError } = directory
   const paneRef = useRef<HTMLElement>(null)
@@ -100,6 +103,20 @@ export function FilePane({ title, subtitle, directory, actions }: FilePaneProps)
         onUp={() => void goUp()}
         onRefresh={() => void refresh()}
       />
+
+      {notice !== undefined && notice !== null && (
+        <div
+          role="status"
+          className="flex shrink-0 items-start justify-between gap-3 border-b border-amber-500/15 bg-amber-500/[0.07] px-3 py-2 text-[12px] text-amber-200"
+        >
+          <span className="select-text">{notice}</span>
+          {onDismissNotice !== undefined && (
+            <button type="button" onClick={onDismissNotice} className="shrink-0 text-[11px] text-amber-200/70 hover:text-amber-100">
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
 
       {error !== null && (
         <div

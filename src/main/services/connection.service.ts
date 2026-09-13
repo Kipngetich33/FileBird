@@ -11,16 +11,27 @@ import { AppError } from '../errors'
 import { createLogger } from '../logger'
 import { type HostKeyStore, describeHostKey } from '../sftp/host-keys'
 import { notConnected } from '../sftp/sftp-errors'
-import type { SftpProvider } from '../sftp/sftp-provider'
+import type { SftpAuth, SftpProvider } from '../sftp/sftp-provider'
+import { loadPrivateKey } from '../ssh/private-keys'
 
 const log = createLogger('connections')
 
 /** How long a "trust this host key?" question stays answerable. */
 const PENDING_TTL_MS = 2 * 60_000
 
+export interface ConnectHooks {
+  /**
+   * Runs once the connection is ready, whether directly or after a host key was
+   * trusted. A returned string is passed to the renderer as a notice. Failures
+   * are logged and reported as a notice; they never undo the connection.
+   */
+  onConnected?: (connection: ConnectionInfo) => Promise<string | undefined>
+}
+
 interface PendingTrust {
-  /** Includes the password, so it must not outlive its expiry. */
+  /** Includes the password or passphrase, so it must not outlive its expiry. */
   request: ConnectRequest
+  hooks: ConnectHooks
   key: Buffer
   expiresAt: number
   /** Deletes the entry at expiry even if the user never answers. */
@@ -36,6 +47,7 @@ export interface ConnectionServiceOptions {
   hostKeys: HostKeyStore
   createProvider: () => SftpProvider
   onConnectionClosed: (event: ConnectionClosedEvent) => void
+  loadKey?: (path: string, passphrase?: string) => Promise<Buffer>
   pendingTtlMs?: number
   now?: () => number
 }
@@ -60,8 +72,11 @@ export class ConnectionService {
     this.now = options.now ?? Date.now
   }
 
-  async connect(request: ConnectRequest): Promise<ConnectOutcome> {
+  async connect(request: ConnectRequest, hooks: ConnectHooks = {}): Promise<ConnectOutcome> {
     const { host, port } = request
+    // Local checks first: a missing key file or a wrong passphrase is reported
+    // before anything touches the network.
+    const auth = await this.resolveAuth(request)
     const saved = await this.options.hostKeys.lookup(host, port)
     const offered: { key: Buffer | null } = { key: null }
     const provider = this.options.createProvider()
@@ -71,7 +86,7 @@ export class ConnectionService {
         host,
         port,
         username: request.username,
-        password: request.auth.password,
+        auth,
         verifyHostKey: (key) => {
           offered.key = Buffer.from(key)
           return saved !== null && saved.equals(key)
@@ -88,7 +103,7 @@ export class ConnectionService {
           const timer = setTimeout(() => this.pending.delete(token), ttl)
           // Never keep the app alive just to expire a question.
           timer.unref()
-          this.pending.set(token, { request, key, expiresAt: this.now() + ttl, timer })
+          this.pending.set(token, { request, hooks, key, expiresAt: this.now() + ttl, timer })
           return { status: 'host-key-unknown', token, host, port, hostKey: describeHostKey(key) }
         }
         log.warn('Host key changed; connection refused', { host, port })
@@ -103,7 +118,9 @@ export class ConnectionService {
       throw error
     }
 
-    return { status: 'connected', connection: await this.register(provider, request) }
+    const connection = await this.register(provider, request)
+    const notice = await this.afterConnected(hooks, connection)
+    return notice === undefined ? { status: 'connected', connection } : { status: 'connected', connection, notice }
   }
 
   /** Stores exactly the key the main process saw for this token, then connects requiring it. */
@@ -116,10 +133,10 @@ export class ConnectionService {
       throw new AppError('INVALID_INPUT', 'This confirmation has expired. Connect again to continue.')
     }
 
-    const { request, key } = pending
+    const { request, hooks, key } = pending
     await this.options.hostKeys.trust(request.host, request.port, key)
     log.info('Host key trusted', { host: request.host, port: request.port, ...describeHostKey(key) })
-    return this.connect(request)
+    return this.connect(request, hooks)
   }
 
   forgetHostKey(host: string, port: number): Promise<void> {
@@ -172,6 +189,23 @@ export class ConnectionService {
 
     log.info('Connected', { host: info.host, port: info.port })
     return info
+  }
+
+  private async resolveAuth(request: ConnectRequest): Promise<SftpAuth> {
+    if (request.auth.type === 'password') return { type: 'password', password: request.auth.password }
+    const load = this.options.loadKey ?? loadPrivateKey
+    const key = await load(request.auth.privateKeyPath, request.auth.passphrase)
+    return { type: 'privateKey', key, passphrase: request.auth.passphrase }
+  }
+
+  private async afterConnected(hooks: ConnectHooks, connection: ConnectionInfo): Promise<string | undefined> {
+    if (hooks.onConnected === undefined) return undefined
+    try {
+      return await hooks.onConnected(connection)
+    } catch (error) {
+      log.warn('After-connect step failed', { error: error instanceof Error ? error.message : String(error) })
+      return 'Connected, but a follow-up step failed. See the log for details.'
+    }
   }
 
   private prunePending(): void {

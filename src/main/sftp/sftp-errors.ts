@@ -44,7 +44,12 @@ export const notConnected = (): AppError =>
  * about what the user can check. Returns null for anything unrecognised, which
  * callers rethrow so it is logged in full.
  */
-export function fromConnectError(error: unknown, host: string, port: number): AppError | null {
+export function fromConnectError(
+  error: unknown,
+  host: string,
+  port: number,
+  authType: 'password' | 'privateKey' = 'password'
+): AppError | null {
   switch (errnoOf(error)) {
     case 'ENOTFOUND':
     case 'EAI_AGAIN':
@@ -66,7 +71,12 @@ export function fromConnectError(error: unknown, host: string, port: number): Ap
     case 'client-timeout':
       return new AppError('CONNECTION_TIMED_OUT', `Connection to "${host}" timed out.`)
     case 'client-authentication':
-      return new AppError('AUTH_FAILED', 'Authentication failed. Check the username and password.')
+      return authType === 'privateKey'
+        ? new AppError(
+            'AUTH_FAILED',
+            "The server didn't accept this key. Check the username, and that the key's public half is authorised on the server."
+          )
+        : new AppError('AUTH_FAILED', 'Authentication failed. Check the username and password.')
     case 'handshake':
       return new AppError(
         'HANDSHAKE_FAILED',

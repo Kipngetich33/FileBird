@@ -9,11 +9,21 @@ export const IPC = {
   SYSTEM_GET_VERSION: 'system:get-version',
   LOCAL_GET_HOME_DIRECTORY: 'local:get-home-directory',
   LOCAL_LIST_DIRECTORY: 'local:list-directory',
-  SFTP_CONNECT: 'sftp:connect',
   SFTP_TRUST_HOST_KEY_AND_CONNECT: 'sftp:trust-host-key-and-connect',
   SFTP_FORGET_HOST_KEY: 'sftp:forget-host-key',
   SFTP_LIST_DIRECTORY: 'sftp:list-directory',
-  SFTP_DISCONNECT: 'sftp:disconnect'
+  SFTP_DISCONNECT: 'sftp:disconnect',
+  CONNECTIONS_LIST: 'connections:list',
+  CONNECTIONS_CREATE: 'connections:create',
+  CONNECTIONS_UPDATE: 'connections:update',
+  CONNECTIONS_DELETE: 'connections:delete',
+  CONNECTIONS_FORGET_SECRET: 'connections:forget-secret',
+  CONNECTIONS_CONNECT: 'connections:connect',
+  CONNECTIONS_CONNECT_UNSAVED: 'connections:connect-unsaved',
+  KEYS_PICK: 'keys:pick',
+  KEYS_INSPECT: 'keys:inspect',
+  SSH_CONFIG_PREVIEW: 'ssh-config:preview',
+  SSH_CONFIG_IMPORT: 'ssh-config:import'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -72,23 +72,31 @@ export interface SftpTestServer {
   keyscanFingerprints(): Promise<string[]>
   /** Ends every open SSH session from the server side, like a server restart would. */
   killSessions(): Promise<void>
+  /** Adds an OpenSSH public key line to the user's authorized_keys. */
+  authorizeKey(publicKey: string): Promise<void>
   pause(): Promise<void>
   unpause(): Promise<void>
   remove(): Promise<void>
 }
 
-export async function startSftpServer(label: string): Promise<SftpTestServer> {
+export interface SftpServerOptions {
+  /** false makes the server key-only, as most cloud servers are. Default true. */
+  passwordAccess?: boolean
+}
+
+export async function startSftpServer(label: string, options: SftpServerOptions = {}): Promise<SftpTestServer> {
   await assertDockerAvailable()
 
   const name = `fly-sftp-${label}-${process.pid}-${Date.now()}`
   const password = `pw-${randomBytes(12).toString('hex')}`
+  const passwordAccess = options.passwordAccess ?? true
 
   await docker(
     [
       'run', '-d', '--rm', '--name', name,
       '-p', '127.0.0.1::2222',
       '-e', 'PUID=1000', '-e', 'PGID=1000', '-e', 'TZ=Etc/UTC',
-      '-e', 'USER_NAME=fly', '-e', `USER_PASSWORD=${password}`, '-e', 'PASSWORD_ACCESS=true',
+      '-e', 'USER_NAME=fly', '-e', `USER_PASSWORD=${password}`, '-e', `PASSWORD_ACCESS=${passwordAccess}`,
       SFTP_IMAGE
     ],
     180_000
@@ -182,6 +190,21 @@ export async function startSftpServer(label: string): Promise<SftpTestServer> {
       // Per-connection processes are "sshd-session"; the listener is "sshd.pam".
       // The bracket keeps pkill from matching (and killing) this shell itself.
       await exec("pkill -f '[s]shd-session' || true")
+    },
+
+    async authorizeKey(publicKey) {
+      // Passed as an environment variable so the key needs no shell quoting.
+      await docker([
+        'exec', '-e', `FLY_PUBLIC_KEY=${publicKey}`, name, 'sh', '-c',
+        [
+          'set -e',
+          'mkdir -p /config/.ssh',
+          'printf "%s\\n" "$FLY_PUBLIC_KEY" >> /config/.ssh/authorized_keys',
+          'chown -R 1000:1000 /config/.ssh',
+          'chmod 700 /config/.ssh',
+          'chmod 600 /config/.ssh/authorized_keys'
+        ].join(' && ')
+      ])
     },
 
     pause: async () => {

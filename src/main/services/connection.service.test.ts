@@ -140,7 +140,7 @@ describe('ConnectionService', () => {
 
       expect((await hostKeys.lookup('example.com', 22))?.equals(KEY_A)).toBe(true)
       expect(providers).toHaveLength(2)
-      expect(providers[1]?.seenOptions?.password).toBe('hunter2')
+      expect(providers[1]?.seenOptions?.auth).toEqual({ type: 'password', password: 'hunter2' })
       expect(providers[1]?.seenOptions?.verifyHostKey(KEY_B)).toBe(false)
       expect(id).toMatch(/^[0-9a-f-]{36}$/)
     })

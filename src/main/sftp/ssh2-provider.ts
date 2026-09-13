@@ -81,7 +81,7 @@ export class Ssh2SftpProvider implements SftpProvider {
     if (this.used) return Promise.reject(new Error('Ssh2SftpProvider instances are single-use'))
     this.used = true
 
-    const { host, port, username, password } = options
+    const { host, port, username, auth } = options
     const client = new Client()
     this.client = client
 
@@ -92,7 +92,7 @@ export class Ssh2SftpProvider implements SftpProvider {
       const fail = (error: unknown): void => {
         if (settled) return
         settled = true
-        reject(fromConnectError(error, host, port) ?? error)
+        reject(fromConnectError(error, host, port, auth.type) ?? error)
         client.end()
       }
 
@@ -140,11 +140,14 @@ export class Ssh2SftpProvider implements SftpProvider {
         })
       })
 
-      // Tried in order: many servers take passwords only via keyboard-interactive.
-      const authMethods: AnyAuthMethod[] = [
-        { type: 'password', username, password },
-        { type: 'keyboard-interactive', username, prompt: answerPasswordPrompt(password) }
-      ]
+      const authMethods: AnyAuthMethod[] =
+        auth.type === 'password'
+          ? // Tried in order: many servers take passwords only via keyboard-interactive.
+            [
+              { type: 'password', username, password: auth.password },
+              { type: 'keyboard-interactive', username, prompt: answerPasswordPrompt(auth.password) }
+            ]
+          : [{ type: 'publickey', username, key: auth.key, passphrase: auth.passphrase }]
 
       try {
         client.connect({

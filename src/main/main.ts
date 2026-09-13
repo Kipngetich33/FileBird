@@ -1,12 +1,20 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog, type OpenDialogOptions } from 'electron'
+import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { IPC_EVENTS } from '../shared/constants/channels'
+import { registerConnectionsIpc } from './ipc/connections.ipc'
 import { registerLocalFilesIpc } from './ipc/local-files.ipc'
 import { registerSftpIpc } from './ipc/sftp.ipc'
 import { registerSystemIpc } from './ipc/system.ipc'
+import { KeyringSecretStore } from './secrets/keyring-secret-store'
+import { keychainService } from './secrets/secret-store'
+import { ConnectionProfilesService } from './services/connection-profiles.service'
 import { ConnectionService } from './services/connection.service'
+import { SshConfigImportService } from './services/ssh-config-import.service'
 import { HostKeyStore } from './sftp/host-keys'
 import { Ssh2SftpProvider } from './sftp/ssh2-provider'
+import { SshConfigImporter } from './ssh/ssh-config'
+import { ConnectionStorage } from './storage/connection-storage'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
 
@@ -14,6 +22,13 @@ const isDev = !app.isPackaged
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
 let connections: ConnectionService | null = null
+
+/**
+ * The home folder Fly starts in and reads ~/.ssh/config from. Unpackaged builds
+ * accept FLY_DEV_HOME so the smoke test can use a fixture folder: overriding HOME
+ * instead would also hide the macOS login keychain. Packaged builds ignore it.
+ */
+const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FLY_DEV_HOME'] : homedir()
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -52,15 +67,30 @@ function createMainWindow(): BrowserWindow {
   return window
 }
 
+/** The native file dialog, opened by the main process so the renderer only ever receives a path. */
+async function pickPrivateKey(): Promise<string | null> {
+  const options: OpenDialogOptions = {
+    title: 'Choose a private key',
+    buttonLabel: 'Choose',
+    defaultPath: join(appHome, '.ssh'),
+    properties: ['openFile', 'showHiddenFiles']
+  }
+  const window = BrowserWindow.getFocusedWindow()
+  const result = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options)
+  return result.canceled ? null : (result.filePaths[0] ?? null)
+}
+
 void app.whenReady().then(() => {
   app.setAppUserModelId('com.titansoft.fly')
 
   applyContentSecurityPolicy()
   registerSystemIpc()
-  registerLocalFilesIpc()
+  registerLocalFilesIpc(appHome)
+
+  const userData = app.getPath('userData')
 
   connections = new ConnectionService({
-    hostKeys: new HostKeyStore(join(app.getPath('userData'), 'known-hosts.json')),
+    hostKeys: new HostKeyStore(join(userData, 'known-hosts.json')),
     createProvider: () => new Ssh2SftpProvider(),
     onConnectionClosed: (event) => {
       for (const window of BrowserWindow.getAllWindows()) {
@@ -69,6 +99,17 @@ void app.whenReady().then(() => {
     }
   })
   registerSftpIpc(connections)
+
+  const profiles = new ConnectionProfilesService({
+    storage: new ConnectionStorage(join(userData, 'connections.json')),
+    secrets: new KeyringSecretStore(keychainService(app.isPackaged)),
+    connections
+  })
+  const imports = new SshConfigImportService(
+    new SshConfigImporter({ home: appHome, localUser: userInfo().username, localHost: hostname() }),
+    profiles
+  )
+  registerConnectionsIpc({ profiles, imports, pickPrivateKey })
 
   createMainWindow()
 

@@ -94,6 +94,20 @@ export function assertUsername(value: unknown, field = 'username'): string {
   return username
 }
 
+export function assertBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new AppError('INVALID_INPUT', `Expected "${field}" to be true or false.`)
+  return value
+}
+
+/** A display name: may be empty only where the caller allows it. */
+export function assertName(value: unknown, field = 'name', { allowEmpty = false } = {}): string {
+  const name = assertString(value, field, 100).trim()
+  if ((!allowEmpty && name.length === 0) || hasControlCharacter(name)) {
+    throw new AppError('INVALID_INPUT', `"${field}" must not be empty or contain control characters.`)
+  }
+  return name
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function assertUuid(value: unknown, field: string): string {

@@ -7,11 +7,16 @@ import type { AppError } from '../errors'
  * Milestone 3 subset. Upload, download, delete, mkdir and rename are added in
  * the milestones that need them rather than stubbed here.
  */
+export type SftpAuth =
+  | { type: 'password'; password: string }
+  /** `key` is the private key file's contents, already checked by loadPrivateKey. */
+  | { type: 'privateKey'; key: Buffer; passphrase?: string }
+
 export interface SftpConnectOptions {
   host: string
   port: number
   username: string
-  password: string
+  auth: SftpAuth
   /**
    * Called during the handshake with the server's raw public key. Return false
    * to refuse the server; connect() then rejects.

@@ -1,6 +1,5 @@
 import type { Stats } from 'node:fs'
 import { lstat, readdir, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { DirectoryListing, FileEntry, FileKind } from '../../shared/types/files'
 import { fromFsError } from '../errors'
@@ -12,10 +11,6 @@ import { fromFsError } from '../errors'
  * Deliberately free of any `electron` import so it can be unit-tested against
  * a real temporary directory.
  */
-
-export function getHomeDirectory(): string {
-  return homedir()
-}
 
 /** `path` must already be absolute and normalised (see `assertAbsolutePath`). */
 export async function listDirectory(path: string): Promise<DirectoryListing> {

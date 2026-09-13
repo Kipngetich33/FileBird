@@ -78,13 +78,26 @@ src/
 │   ├── security.ts    CSP, navigation guards
 │   ├── logger.ts      structured logging with credential redaction
 │   ├── ipc/           validated IPC handlers
-│   ├── services/      local files and remote connections, free of IPC concerns
-│   └── sftp/          SftpProvider abstraction, ssh2 implementation, host-key trust store
+│   ├── services/      local files, connections, saved profiles, SSH config import
+│   ├── sftp/          SftpProvider abstraction, ssh2 implementation, host-key trust store
+│   ├── ssh/           private keys, ~/.ssh/config reading
+│   ├── secrets/       OS keychain access (the only place secrets are stored)
+│   └── storage/       connections.json and other app data files
 ├── preload/       the contextBridge API surface
 ├── renderer/      React application
 └── shared/        types and channel constants used by both sides
 test/support/      OpenSSH container helper for tests
 ```
 
-Server host keys are trusted on first use: Fly shows the fingerprint before
-connecting, remembers the key, and refuses to connect if it ever changes.
+## Security notes
+
+- **Host keys** are trusted on first use: Fly shows the fingerprint before
+  connecting, remembers the key, and refuses to connect if it ever changes.
+- **Passwords and key passphrases** are stored only in the operating system's
+  keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service),
+  and only if you tick "Remember" and the server accepts them. Saved connections
+  (`connections.json`) contain no secrets.
+- **Private key files** are read by the main process when connecting; the UI
+  never receives key contents.
+- **Importing `~/.ssh/config`** asks first if your config contains `Match exec`,
+  because reading host settings with `ssh -G` runs those commands.

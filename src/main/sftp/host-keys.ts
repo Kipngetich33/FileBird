@@ -1,11 +1,6 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
 import type { HostKeyInfo } from '../../shared/types/connection'
-import { errnoOf } from '../errors'
-import { createLogger } from '../logger'
-
-const log = createLogger('host-keys')
+import { JsonDocument } from '../storage/json-document'
 
 /** OpenSSH's fingerprint format: SHA256 of the key blob, unpadded base64. */
 export function hostKeyFingerprint(key: Buffer): string {
@@ -41,8 +36,6 @@ interface StoreFile {
   hosts: Record<string, StoredHostKey>
 }
 
-const emptyStore = (): StoreFile => ({ version: 1, hosts: {} })
-
 function isStoredHostKey(value: unknown): value is StoredHostKey {
   return (
     typeof value === 'object' &&
@@ -52,87 +45,48 @@ function isStoredHostKey(value: unknown): value is StoredHostKey {
   )
 }
 
-/**
- * Host keys the user has chosen to trust, in a JSON file in the app's data
- * folder. Writes are serialised and atomic (temp file + rename), so a crash
- * mid-write cannot leave a half-written trust store.
- */
+function parseStore(value: unknown): StoreFile {
+  const hosts = (value as { hosts?: unknown } | null)?.hosts
+  if (typeof hosts !== 'object' || hosts === null) throw new Error('missing "hosts"')
+  const store: StoreFile = { version: 1, hosts: {} }
+  for (const [id, entry] of Object.entries(hosts)) {
+    if (isStoredHostKey(entry)) store.hosts[id] = entry
+  }
+  return store
+}
+
+/** Host keys the user has chosen to trust, in a JSON file in the app's data folder. */
 export class HostKeyStore {
-  private readonly filePath: string
-  private pending: Promise<unknown> = Promise.resolve()
+  private readonly document: JsonDocument<StoreFile>
 
   constructor(filePath: string) {
-    this.filePath = filePath
+    this.document = new JsonDocument({ path: filePath, empty: () => ({ version: 1, hosts: {} }), parse: parseStore })
   }
 
   async lookup(host: string, port: number): Promise<Buffer | null> {
-    await this.pending
-    const entry = (await this.read()).hosts[hostKeyId(host, port)]
+    const entry = (await this.document.read()).hosts[hostKeyId(host, port)]
     return entry === undefined ? null : Buffer.from(entry.key, 'base64')
   }
 
-  trust(host: string, port: number, key: Buffer): Promise<void> {
-    return this.update((hosts) => {
-      hosts[hostKeyId(host, port)] = {
-        algorithm: hostKeyAlgorithm(key),
-        key: key.toString('base64'),
-        addedAt: new Date().toISOString()
+  async trust(host: string, port: number, key: Buffer): Promise<void> {
+    await this.document.update((store) => ({
+      ...store,
+      hosts: {
+        ...store.hosts,
+        [hostKeyId(host, port)]: {
+          algorithm: hostKeyAlgorithm(key),
+          key: key.toString('base64'),
+          addedAt: new Date().toISOString()
+        }
       }
-    })
+    }))
   }
 
-  forget(host: string, port: number): Promise<void> {
-    return this.update((hosts) => {
+  async forget(host: string, port: number): Promise<void> {
+    await this.document.update((store) => {
+      const hosts = { ...store.hosts }
       delete hosts[hostKeyId(host, port)]
+      return { ...store, hosts }
     })
-  }
-
-  private update(change: (hosts: Record<string, StoredHostKey>) => void): Promise<void> {
-    const run = this.pending.then(async () => {
-      const store = await this.read()
-      change(store.hosts)
-      await this.write(store)
-    })
-    // A failed write must not wedge every later one.
-    this.pending = run.catch(() => undefined)
-    return run
-  }
-
-  private async read(): Promise<StoreFile> {
-    let text: string
-    try {
-      text = await readFile(this.filePath, 'utf8')
-    } catch (error) {
-      if (errnoOf(error) === 'ENOENT') return emptyStore()
-      throw error
-    }
-
-    try {
-      const parsed: unknown = JSON.parse(text)
-      const hosts = (parsed as { hosts?: unknown } | null)?.hosts
-      if (typeof hosts !== 'object' || hosts === null) throw new Error('missing "hosts"')
-      const store = emptyStore()
-      for (const [id, entry] of Object.entries(hosts)) {
-        if (isStoredHostKey(entry)) store.hosts[id] = entry
-      }
-      return store
-    } catch (error) {
-      // Keep the damaged file for inspection rather than silently overwriting
-      // it. The user is simply asked to confirm keys again.
-      const aside = `${this.filePath}.corrupt-${Date.now()}`
-      await rename(this.filePath, aside).catch(() => undefined)
-      log.warn('Trust store was unreadable and has been set aside', {
-        aside,
-        error: error instanceof Error ? error.message : String(error)
-      })
-      return emptyStore()
-    }
-  }
-
-  private async write(store: StoreFile): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true })
-    const temp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`
-    await writeFile(temp, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 })
-    await rename(temp, this.filePath)
   }
 }

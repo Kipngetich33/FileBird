@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC, IPC_EVENTS } from '../shared/constants/channels'
-import type { ConnectOutcome, ConnectRequest, ConnectionClosedEvent } from '../shared/types/connection'
+import type { ConnectOutcome, ConnectionClosedEvent } from '../shared/types/connection'
+import type {
+  ConnectionInput,
+  ConnectionSummary,
+  ImportPreview,
+  KeyInfo,
+  SecretEntry
+} from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
 import type { SystemVersions } from '../shared/types/system'
 
@@ -20,9 +27,29 @@ const api = {
     listDirectory: (path: string): Promise<DirectoryListing> =>
       ipcRenderer.invoke(IPC.LOCAL_LIST_DIRECTORY, path)
   },
+  connections: {
+    list: (): Promise<ConnectionSummary[]> => ipcRenderer.invoke(IPC.CONNECTIONS_LIST),
+    create: (input: ConnectionInput): Promise<ConnectionSummary> => ipcRenderer.invoke(IPC.CONNECTIONS_CREATE, input),
+    update: (id: string, input: ConnectionInput): Promise<ConnectionSummary> =>
+      ipcRenderer.invoke(IPC.CONNECTIONS_UPDATE, id, input),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.CONNECTIONS_DELETE, id),
+    forgetSecret: (id: string): Promise<void> => ipcRenderer.invoke(IPC.CONNECTIONS_FORGET_SECRET, id),
+    connect: (id: string, secret?: SecretEntry): Promise<ConnectOutcome> =>
+      ipcRenderer.invoke(IPC.CONNECTIONS_CONNECT, id, secret),
+    connectUnsaved: (input: ConnectionInput, secret?: SecretEntry): Promise<ConnectOutcome> =>
+      ipcRenderer.invoke(IPC.CONNECTIONS_CONNECT_UNSAVED, input, secret)
+  },
+  keys: {
+    pick: (): Promise<string | null> => ipcRenderer.invoke(IPC.KEYS_PICK),
+    inspect: (path: string): Promise<KeyInfo> => ipcRenderer.invoke(IPC.KEYS_INSPECT, path)
+  },
+  sshConfig: {
+    preview: (options: { allowCommands: boolean }): Promise<ImportPreview> =>
+      ipcRenderer.invoke(IPC.SSH_CONFIG_PREVIEW, options),
+    import: (aliases: string[], options: { allowCommands: boolean }): Promise<ConnectionSummary[]> =>
+      ipcRenderer.invoke(IPC.SSH_CONFIG_IMPORT, aliases, options)
+  },
   sftp: {
-    connect: (request: ConnectRequest): Promise<ConnectOutcome> =>
-      ipcRenderer.invoke(IPC.SFTP_CONNECT, request),
     trustHostKeyAndConnect: (token: string): Promise<ConnectOutcome> =>
       ipcRenderer.invoke(IPC.SFTP_TRUST_HOST_KEY_AND_CONNECT, token),
     forgetHostKey: (host: string, port: number): Promise<void> =>

@@ -22,6 +22,14 @@ export type AppErrorCode =
   | 'HANDSHAKE_FAILED'
   | 'CONNECTION_LOST'
   | 'NOT_CONNECTED'
+  | 'KEY_NOT_FOUND'
+  | 'KEY_UNREADABLE'
+  | 'KEY_INVALID'
+  | 'KEY_IS_PUBLIC'
+  | 'KEY_PASSPHRASE_REQUIRED'
+  | 'KEY_PASSPHRASE_INCORRECT'
+  | 'KEYCHAIN_UNAVAILABLE'
+  | 'SSH_CONFIG_UNAVAILABLE'
   | 'INTERNAL'
 
 export const isAppErrorPayload = (value: unknown): value is AppErrorPayload =>

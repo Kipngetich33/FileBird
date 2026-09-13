@@ -10,24 +10,26 @@ Targets macOS (primary), Windows, Linux.
 | `docs/PLAN.md` | **Authoritative spec.** 24 sections, 10 milestones. Requirements — do not redesign against it. |
 | `docs/STATUS.md` | **Session handoff.** Where work stopped, exact resume commands. |
 | `docs/README.md` | Milestone tracker + superseded decisions. |
-| `docs/MILESTONE-3-PLAN.md` | Latest milestone plan: library evaluation, host-key trust, error model, test server. |
+| `docs/MILESTONE-3-PLAN.md` | M3 plan: SSH library evaluation, host-key trust, error model, test server. |
+| `docs/MILESTONE-4-PLAN.md` | Latest milestone plan: keychain storage, private keys, Connection Manager, `~/.ssh/config` import. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–3 ✅ done — runtime-verified and committed on `main`.**
+**Milestones 1–4 ✅ done — runtime-verified and committed on `main`.**
 
-Two panes: local files on the left; on the right a quick-connect form (password
-auth) that becomes a remote file browser. Host keys are trusted on first use and
-a changed key is refused. Verified by `npm test` (163 unit), `npm run
-test:integration` (19 against real OpenSSH) and `npm run smoke` (36 checks
-driving the real app).
+Local files on the left. On the right, saved connections (§8): password or
+private-key login (optional passphrase), passwords/passphrases remembered in the
+OS keychain only after the server accepts them, import from `~/.ssh/config`, and
+"connect without saving". Host keys are trusted on first use; a changed key is
+refused. Verified by `npm test` (226 unit), `npm run test:integration` (real
+OpenSSH, real Keychain, real `ssh`) and `npm run smoke` (47 checks driving the
+real app, including a restart that proves secrets persist).
 
-Next: **Milestone 4 (SSH Key Authentication)** — not started. Plan it before
-writing code. It becomes the §8 Connection Manager: saved profiles, private keys
-+ passphrases, secrets in the OS keychain (§9), and a one-way `~/.ssh/config`
-import resolved with `ssh -G` (decided — see MILESTONE-3-PLAN.md D11).
+Next: **Milestone 5 (Dual Pane Interface)** — not started. Plan it before
+writing code: resizable splitter, active-pane model, cross-pane keyboard,
+per-pane status (see MILESTONE-3-PLAN.md D5 for what M3 already did).
 
 ## Environment constraints — do not "fix" these
 
@@ -45,7 +47,14 @@ import resolved with `ssh -G` (decided — see MILESTONE-3-PLAN.md D11).
 5. **Integration and smoke tests need the Colima VM: `colima start fly`** (it does
    not start at login). Docker CLI is a static binary at `/usr/local/bin/docker`
    — Homebrew has no Intel bottle for it. Test image is pinned:
-   `linuxserver/openssh-server:10.3_p1-r1-ls236`.
+   `linuxserver/openssh-server:10.3_p1-r1-ls236`. Tests also need the OpenSSH
+   client tools (`ssh`, `ssh-keygen`, `ssh-keyscan`), present on macOS.
+6. **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
+   and reads `~/.ssh/config` from. The smoke test uses it; **never override
+   `HOME` instead** — macOS finds the login keychain through `HOME`.
+7. **Keychain namespaces:** `Fly` (packaged), `Fly (development)` (`npm run dev`
+   and smoke), `Fly (test <pid>)` (integration). Accounts are
+   `connection/<uuid>/password|passphrase`.
 
 ## Electron gotcha: `ELECTRON_RUN_AS_NODE`
 
@@ -87,6 +96,25 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   `Input.insertText` types nowhere. Real typing is tested against the built app
   (`npm run smoke`), which opens no DevTools.
 
+## Testing gotchas added in M4
+
+- **Never read a Fly secret's value from another program** (`security … -w`):
+  macOS shows a Keychain access dialog and the call hangs. Check existence by
+  attributes only (`security find-generic-password -s … -a …`, no `-w`); check
+  values through Fly. To delete leftovers, run `@napi-rs/keyring` through the
+  Electron binary (`ELECTRON_RUN_AS_NODE=1`) — the creator can delete silently.
+- **Overriding `HOME` hides the login keychain** ("A default keychain could not
+  be found"). Use `FLY_DEV_HOME`.
+- **`ssh -G` executes `Match exec` commands**, and prints `IdentityFile` with
+  `~`/`%h` unexpanded plus 7 default key names when none is configured.
+- **`ssh2` reports a wrong passphrase like a server rejection** — keys are parsed
+  locally first (`ssh/private-keys.ts`).
+- **CDP text helpers must be parenthesised:** `el?.textContent ?? ''.includes(x)`
+  binds `.includes` to `''` and always passes (this made some M3 smoke checks
+  vacuous until fixed in M4).
+- **After `Page.reload` over CDP, wait for a fresh document** — a check can
+  match the old page before the reload lands.
+
 ## Commands
 
 ```bash
@@ -113,8 +141,11 @@ Renderer (React, sandboxed)  ──contextBridge + IPC──>  Main (app logic, 
 src/
 ├── main/       main.ts · security.ts · logger.ts · errors.ts
 │   ├── ipc/        validated handlers (one file per area)
-│   ├── services/   local-files · connection (owns every remote connection)
-│   └── sftp/       SftpProvider interface · ssh2 implementation · host-key trust store
+│   ├── services/   local-files · connection (live connections) · connection-profiles · ssh-config-import
+│   ├── sftp/       SftpProvider interface · ssh2 implementation · host-key trust store
+│   ├── ssh/        private-key reading/inspection · ~/.ssh/config scan + ssh -G resolution
+│   ├── secrets/    SecretStore interface · OS keychain implementation (@napi-rs/keyring)
+│   └── storage/    JsonDocument (atomic, 0600) · connections.json
 ├── preload/    the ONLY bridge — hand-written, per-method
 ├── renderer/   React app (components/ pages/ hooks/ services/)
 └── shared/     types + IPC channel constants used by both sides
@@ -142,6 +173,13 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Never log credentials.** `logger.ts` redacts keys matching
   password/passphrase/privateKey/secret/token — and the smoke test fails if the
   test password appears anywhere in the main-process output.
+- **Secrets live only in the OS keychain** (via `SecretStore`), are saved only
+  after the server accepts them, and never reach `connections.json`, the log, or
+  the renderer (smoke-tested, mutation-checked).
+- **Private key files are read only in the main process**; the renderer gets a
+  path from the native dialog and a `KeyInfo` summary, never key material.
+- **The SSH config import never runs `ssh -G` on a config with `Match exec`
+  until the user consents** (unit, integration and smoke tested).
 - **Host keys are always verified.** Unknown keys are refused during the
   handshake and only trusted after the user confirms; a changed key is a hard
   stop with no "connect anyway". Never pass a `hostVerifier` that returns `true`.
@@ -163,8 +201,16 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Trust on first use via probe-then-reconnect:** the first connection refuses
   the unknown key; main holds the key + request under a single-use token
   (2-minute timer); confirming stores exactly that key and reconnects requiring it.
-- **Quick connect in M3, Connection Manager in M4** (profiles and keychain together).
-- **`~/.ssh/config`: one-way import in M4**, resolved with `ssh -G`.
+- **Secret storage: `@napi-rs/keyring`** (one OS-store item per secret, as §9
+  names), not Electron `safeStorage` (Linux can fall back to plaintext; Electron
+  -only, so untestable in Vitest) and not archived `keytar`.
+- **Connection Manager in M4:** passwords/passphrases are asked for at connect
+  time (with "Remember"), not typed into the profile form. "Connect without
+  saving" goes through `connections.connectUnsaved`; M3's `sftp.connect` is gone.
+- **`~/.ssh/config`: one-way import**, hosts listed by Fly's parser, resolved with
+  `ssh -F <config> -G -- <alias>`; hosts with warnings start unticked.
+- **Deferred:** SSH agent login, trusting `~/.ssh/known_hosts`, ProxyJump,
+  PKCS#8 conversion (the error gives the `ssh-keygen -p` fix), FIDO keys.
 - **Test server: Colima + OpenSSH container**, not Docker Desktop (GUI admin
   prompt, licence terms), not macOS Remote Login, not an in-process fake.
 - **CSP is production-only** — the Vite dev server needs inline styles and a

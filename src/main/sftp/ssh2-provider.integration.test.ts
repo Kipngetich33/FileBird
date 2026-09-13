@@ -38,7 +38,7 @@ function connectTo(
     host: server.host,
     port: server.port,
     username: server.username,
-    password: overrides.password ?? server.password,
+    auth: { type: 'password', password: overrides.password ?? server.password },
     verifyHostKey: overrides.verifyHostKey ?? (() => true)
   })
   return { provider, connected }
@@ -118,14 +118,14 @@ describe('Ssh2SftpProvider against OpenSSH', () => {
   it('reports nothing listening as CONNECTION_REFUSED', async () => {
     const provider = new Ssh2SftpProvider(FAST)
     const port = await closedPort()
-    const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', password: 'x', verifyHostKey: () => true })
+    const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
     expect(await codeOf(outcome)).toBe('CONNECTION_REFUSED')
   })
 
   it('reports an unresolvable host as HOST_NOT_FOUND', async () => {
     const provider = new Ssh2SftpProvider(FAST)
     // RFC 6761: .invalid never resolves.
-    const outcome = provider.connect({ host: 'fly-test.invalid', port: 22, username: 'x', password: 'x', verifyHostKey: () => true })
+    const outcome = provider.connect({ host: 'fly-test.invalid', port: 22, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
     expect(await codeOf(outcome)).toBe('HOST_NOT_FOUND')
   })
 
@@ -147,7 +147,7 @@ describe('Ssh2SftpProvider against OpenSSH', () => {
 
     it('times out as CONNECTION_TIMED_OUT', async () => {
       const provider = new Ssh2SftpProvider({ ...FAST, readyMs: 800 })
-      const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', password: 'x', verifyHostKey: () => true })
+      const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
       expect(await codeOf(outcome)).toBe('CONNECTION_TIMED_OUT')
     })
 
@@ -156,7 +156,7 @@ describe('Ssh2SftpProvider against OpenSSH', () => {
       // lost before handshake". An unhandled second 'error' would throw here
       // and fail this file with an unhandled error.
       const provider = new Ssh2SftpProvider({ ...FAST, readyMs: 800 })
-      const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', password: 'x', verifyHostKey: () => true })
+      const outcome = provider.connect({ host: '127.0.0.1', port, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
       await codeOf(outcome)
       silent.close()
       await sleep(1_500)
