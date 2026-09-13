@@ -7,7 +7,8 @@
  */
 export const IPC = {
   SYSTEM_GET_VERSION: 'system:get-version',
-  SYSTEM_PING: 'system:ping'
+  LOCAL_GET_HOME_DIRECTORY: 'local:get-home-directory',
+  LOCAL_LIST_DIRECTORY: 'local:list-directory'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

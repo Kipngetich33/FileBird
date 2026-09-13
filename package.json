@@ -1,7 +1,7 @@
 {
   "name": "fly",
   "version": "0.1.0",
-  "description": "Fly \u2014 a cross-platform desktop SFTP client",
+  "description": "Fly — a cross-platform desktop SFTP client",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
   "license": "MIT",
@@ -17,6 +17,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
     "build:mac": "npm run build && electron-builder --mac",
     "build:win": "npm run build && electron-builder --win",
     "build:linux": "npm run build && electron-builder --linux",
@@ -36,6 +37,7 @@
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^7.3.6"
+    "vite": "^7.3.6",
+    "vitest": "^5.0.0"
   }
 }

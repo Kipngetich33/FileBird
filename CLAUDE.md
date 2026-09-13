@@ -15,17 +15,18 @@ Targets macOS (primary), Windows, Linux.
 
 ## Current state
 
-**Milestone 1 (Application Foundation): ✅ done — runtime-verified and committed.**
+**Milestones 1 (Application Foundation) and 2 (Local File Browser): ✅ done —
+runtime-verified and committed on `main`.**
 
-`typecheck`, `build`, `dev` and `smoke` all pass. The app runs: `npm run smoke`
-drives the real window over CDP and checks the whole preload → IPC → main chain,
-**7/7 passing**. Committed as `150d9cc` on `main`; working tree clean.
+The app opens a local file pane in the home folder: open / Back / parent /
+refresh, keyboard navigation, Name · Type · Size · Modified, symlinks followed,
+friendly errors. Verified by `npm test` (56 unit tests) and `npm run smoke`
+(21 end-to-end checks against the real window, including real mouse and
+keyboard input).
 
-The old Electron-binary blocker is **resolved** — Electron 44.0.0 (x64) is
-installed and launching.
-
-Next: **Milestone 2 (Local File Browser)** — not started. Plan it before writing
-code, per the working agreement below. See `docs/STATUS.md` for the shape of it.
+Next: **Milestone 3 (SFTP Connection)** — not started. Plan it before writing
+code. It needs a library evaluation first (spec §7) and a local test SFTP
+server (§19). See `docs/STATUS.md`.
 
 ## Environment constraints — do not "fix" these
 
@@ -34,6 +35,7 @@ code, per the working agreement below. See `docs/STATUS.md` for the shape of it.
 2. **Vite is pinned to 7.** `@vitejs/plugin-react` v6 requires Vite 8, but
    `electron-vite` v5 peers on Vite ≤ 7. Working set: `vite@^7.3.6` +
    `@vitejs/plugin-react@^5.0.4`. `npm update` will break the install with ERESOLVE.
+   Vitest 5 peers on Vite `^6.4 || ^7 || ^8`, so it is compatible with the pin.
 3. **TypeScript 7 removed `baseUrl`** (`TS5102`). Path aliases must be relative to
    the tsconfig: `"@shared/*": ["./src/shared/*"]`.
 4. **This is a genuine Intel Mac** (i7-8559U), not Apple Silicon. The spec
@@ -69,6 +71,7 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 npm run dev        # Electron + Vite, hot reload
 npm run build      # typecheck, then build main/preload/renderer
 npm run typecheck  # both TS projects
+npm test           # Vitest unit tests (src/**/*.test.ts)
 npm run smoke      # CDP end-to-end test: drives the real app, checks the IPC chain
                    # exits 1 on any failed check — extend it as milestones land
 npm run build:mac  # package .dmg (arm64 + x64)
@@ -82,7 +85,7 @@ Renderer (React, sandboxed)  ──contextBridge + IPC──>  Main (app logic, 
 
 ```
 src/
-├── main/       main.ts · security.ts · logger.ts · ipc/
+├── main/       main.ts · security.ts · logger.ts · errors.ts · ipc/ · services/
 ├── preload/    the ONLY bridge — hand-written, per-method
 ├── renderer/   React app (components/ pages/ hooks/ services/)
 └── shared/     types + IPC channel constants used by both sides
@@ -96,9 +99,12 @@ src/
 - **Never expose `fs`, `child_process`, or `process` to React.** The renderer
   requests operations; main performs them.
 - **Validate every IPC input** — treat renderer input as untrusted. Use
-  `assertString` etc. from `src/main/ipc/validate.ts`.
+  `assertString` / `assertAbsolutePath` from `src/main/ipc/validate.ts`.
+- **The renderer never builds a path.** Main returns absolute paths on every
+  `FileEntry` plus `parentPath`; the renderer only sends back paths it was given.
 - **Errors cross IPC as a `{code, message}` JSON envelope** thrown by
-  `ipc/handle.ts`, unwrapped by `renderer/services/errors.ts`. Stack traces stay in
+  `ipc/handle.ts`, unwrapped by `renderer/services/errors.ts`. Throw `AppError`
+  (`src/main/errors.ts`) for user-actionable failures; `fromFsError` maps errno. Stack traces stay in
   main and go only to the log.
 - **Never log credentials.** `logger.ts` redacts keys matching
   password/passphrase/privateKey/secret/token.
@@ -112,6 +118,10 @@ src/
   main/preload/renderer split.
 - **`sandbox: true`** forces a CJS preload, which is why `package.json` has no
   `"type": "module"`.
+- **One `FileEntry` type for local and remote** (`src/shared/types/files.ts`).
+  The SFTP provider maps into it so the pane is reused unchanged in Milestone 5.
+- **Vitest** for unit tests, not `node:test`: Node's type stripping can't
+  resolve this codebase's extensionless imports or path aliases.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer.

@@ -1,4 +1,4 @@
-import type { PingResult, SystemVersions } from '@shared/types/system'
+import type { SystemVersions } from '@shared/types/system'
 import { toAppError } from './errors'
 
 /**
@@ -12,14 +12,6 @@ export const systemService = {
   async getVersions(): Promise<SystemVersions> {
     try {
       return await window.api.system.getVersion()
-    } catch (error) {
-      throw toAppError(error)
-    }
-  },
-
-  async ping(message: string): Promise<PingResult> {
-    try {
-      return await window.api.system.ping(message)
     } catch (error) {
       throw toAppError(error)
     }

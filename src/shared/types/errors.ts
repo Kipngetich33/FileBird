@@ -11,6 +11,9 @@ export interface AppErrorPayload {
 
 export type AppErrorCode =
   | 'INVALID_INPUT'
+  | 'NOT_FOUND'
+  | 'PERMISSION_DENIED'
+  | 'NOT_A_DIRECTORY'
   | 'INTERNAL'
 
 export const isAppErrorPayload = (value: unknown): value is AppErrorPayload =>

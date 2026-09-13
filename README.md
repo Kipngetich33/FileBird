@@ -26,6 +26,8 @@ npm run dev      # Electron + Vite with hot reload
 | `npm run build` | Typecheck, then build main / preload / renderer |
 | `npm run start` | Preview the production build |
 | `npm run typecheck` | Typecheck both TS projects |
+| `npm test` | Unit tests (Vitest) |
+| `npm run smoke` | End-to-end check: launches the built app and drives it over CDP |
 | `npm run build:mac` | Package a macOS `.dmg` (arm64 + x64) |
 | `npm run build:win` | Package a Windows NSIS installer |
 | `npm run build:linux` | Package a Linux AppImage |
@@ -62,7 +64,8 @@ src/
 │   ├── main.ts        window creation, app lifecycle
 │   ├── security.ts    CSP, navigation guards
 │   ├── logger.ts      structured logging with credential redaction
-│   └── ipc/           validated IPC handlers
+│   ├── ipc/           validated IPC handlers
+│   └── services/      filesystem (and later SFTP) work, free of IPC concerns
 ├── preload/       the contextBridge API surface
 ├── renderer/      React application
 └── shared/        types and channel constants used by both sides

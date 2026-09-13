@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { registerLocalFilesIpc } from './ipc/local-files.ipc'
 import { registerSystemIpc } from './ipc/system.ipc'
 import { applyContentSecurityPolicy, guardNavigation } from './security'
 import { logger } from './logger'
@@ -49,6 +50,7 @@ void app.whenReady().then(() => {
 
   applyContentSecurityPolicy()
   registerSystemIpc()
+  registerLocalFilesIpc()
   createMainWindow()
 
   logger.info('Application ready', {

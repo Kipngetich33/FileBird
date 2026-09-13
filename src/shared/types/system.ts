@@ -9,11 +9,3 @@ export interface SystemVersions {
   arch: string
   isPackaged: boolean
 }
-
-/** Result of the round-trip test call used to prove IPC works. */
-export interface PingResult {
-  /** Echo of the validated message the renderer sent. */
-  message: string
-  /** ISO timestamp recorded in the main process. */
-  receivedAt: string
-}

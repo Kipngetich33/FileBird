@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { IpcChannel } from '../../shared/constants/channels'
-import { AppError } from './validate'
+import { AppError } from '../errors'
 import { createLogger } from '../logger'
 
 const log = createLogger('ipc')
