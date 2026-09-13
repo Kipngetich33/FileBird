@@ -109,12 +109,14 @@ async function launchApp() {
   await new Promise((r) => ws.addEventListener('open', r))
   let nextId = 0
   const pending = new Map()
+  const dragWaiters = []
   ws.addEventListener('message', (ev) => {
     const msg = JSON.parse(ev.data)
     if (msg.id && pending.has(msg.id)) {
       pending.get(msg.id)(msg)
       pending.delete(msg.id)
     }
+    if (msg.method === 'Input.dragIntercepted') for (const resolve of dragWaiters.splice(0)) resolve(msg.params.data)
   })
   const send = (method, params = {}) =>
     new Promise((resolve) => {
@@ -186,6 +188,42 @@ async function launchApp() {
       for (let c = 1; c <= clickCount; c++) {
         await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: c, modifiers })
         await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: c, modifiers })
+      }
+    },
+    /**
+     * A real mouse drag: press and move over the source until Chromium starts a
+     * drag (intercepted, so its data is known), then hover and drop through
+     * CDP drag events. Returns hover/drop/cancel steps so a test can look
+     * mid-drag.
+     */
+    async startDrag(from, to) {
+      await send('Input.setInterceptDrags', { enabled: true })
+      const intercepted = new Promise((resolve) => dragWaiters.push(resolve))
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1 })
+      for (const step of [0.05, 0.2, 0.5, 1]) {
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + (to.x - from.x) * step, y: from.y + (to.y - from.y) * step, button: 'left', buttons: 1 })
+      }
+      const data = await Promise.race([intercepted, sleep(3000).then(() => null)])
+      const finish = async () => {
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 })
+        await send('Input.setInterceptDrags', { enabled: false })
+      }
+      if (data === null) {
+        await finish()
+        throw new Error('the drag did not start')
+      }
+      return {
+        data,
+        hover: async (point = to) => {
+          await send('Input.dispatchDragEvent', { type: 'dragEnter', x: point.x, y: point.y, data })
+          await send('Input.dispatchDragEvent', { type: 'dragOver', x: point.x, y: point.y, data })
+          await sleep(150)
+        },
+        drop: async (point = to) => {
+          await send('Input.dispatchDragEvent', { type: 'drop', x: point.x, y: point.y, data })
+          await finish()
+          await sleep(150)
+        }
       }
     },
     /** Clicks a button by its text with the real mouse. */
@@ -1053,6 +1091,111 @@ try {
   await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture'`)
   await server.exec('rm -f /config/fixture/alpha/keep.txt')
   await app.clickMenu('command:focus-local')
+
+  // --------------------------------------------------------------- M9: drag and drop ---
+
+  const rowPoint = async (path) => {
+    await app.js(`document.querySelector(${q(rowFor(path))}).scrollIntoView({ block: 'center' })`)
+    const r = await app.js(box(rowFor(path)))
+    return { x: r.x + 40, y: r.y + r.h / 2 }
+  }
+  const jobCount = `document.querySelectorAll(${q(`${PANEL} li[data-status]`)}).length`
+  const dropLabel = (scope) => textOf(`${scope} [data-testid="drop-label"]`)
+
+  // Local → remote: a Cmd-selected file and folder onto the remote listing (over a file row).
+  await writeFile(join(fixture, 'drag-a.txt'), randomBytes(50_000))
+  await mkdir(join(fixture, 'drag-dir'))
+  await writeFile(join(fixture, 'drag-dir', 'inner.txt'), 'inner')
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
+  await selectRow(join(fixture, 'drag-a.txt'))
+  await selectRow(join(fixture, 'drag-dir'), META)
+  const upDrag = await app.startDrag(await rowPoint(join(fixture, 'drag-a.txt')), await rowPoint('/config/fixture/file2.txt'))
+  await upDrag.hover()
+  const upHover = {
+    label: await app.js(dropLabel(REMOTE)),
+    paneActive: await app.js(`document.querySelector(${q(REMOTE)})?.dataset.dropActive === 'true'`),
+    types: upDrag.data.items?.map((item) => item.mimeType)
+  }
+  await app.screenshot('12-drag-to-remote')
+  await upDrag.drop()
+  const dragUploaded = await app.waitFor(`${jobStatus('drag-a.txt')} === 'completed' && ${jobStatus('drag-dir/inner.txt')} === 'completed'`, 20000)
+  record(
+    'UI drag: dragging a selection onto the remote pane shows where it will go, then uploads it through the queue',
+    { upHover, dragUploaded },
+    upHover.label === 'Upload to /config/fixture' && upHover.paneActive && dragUploaded &&
+      (await server.exec('cat /config/fixture/drag-dir/inner.txt')) === 'inner' &&
+      (await server.exec('sha256sum /config/fixture/drag-a.txt')).split(' ')[0] === sha256(await readFile(join(fixture, 'drag-a.txt'))) &&
+      !(await app.js(exists(`${REMOTE} [data-testid="drop-label"]`)))
+  )
+
+  // Remote → local: a remote file onto a local folder row lands in that folder.
+  await server.exec('printf down > /config/fixture/drag-down.txt && chown 1000:1000 /config/fixture/drag-down.txt')
+  await app.clickMenu('command:focus-remote')
+  await app.clickMenu('command:refresh')
+  await selectRow('/config/fixture/drag-down.txt')
+  const downDrag = await app.startDrag(await rowPoint('/config/fixture/drag-down.txt'), await rowPoint(join(fixture, 'alpha')))
+  await downDrag.hover()
+  const downHover = {
+    label: await app.js(dropLabel(LOCAL)),
+    rowHighlighted: await app.js(`document.querySelector(${q(rowFor(join(fixture, 'alpha')))})?.dataset.dropTarget === 'true'`)
+  }
+  await downDrag.drop()
+  const dragDownloaded = await app.waitFor(`${jobStatus('drag-down.txt')} === 'completed'`, 20000)
+  record(
+    'UI drag: dropping a remote file on a local folder row downloads it into that folder',
+    { downHover, dragDownloaded },
+    downHover.label === `Download to ${join(fixture, 'alpha')}` && downHover.rowHighlighted && dragDownloaded &&
+      (await readFile(join(fixture, 'alpha', 'drag-down.txt'), 'utf8').catch(() => '')) === 'down'
+  )
+
+  // Within one pane: no highlight, nothing queued, nothing moved.
+  const jobsBefore = await app.js(jobCount)
+  await app.clickMenu('command:focus-local')
+  await selectRow(join(fixture, 'file2.txt'))
+  const sameDrag = await app.startDrag(await rowPoint(join(fixture, 'file2.txt')), await rowPoint(join(fixture, 'project')))
+  await sameDrag.hover()
+  const sameHover = {
+    label: await app.js(exists(`${LOCAL} [data-testid="drop-label"]`)),
+    rowHighlighted: await app.js(`document.querySelector(${q(rowFor(join(fixture, 'project')))})?.dataset.dropTarget === 'true'`)
+  }
+  await sameDrag.drop()
+  await sleep(500)
+  record(
+    'UI drag: a drag within one pane is refused (no highlight, nothing queued or moved)',
+    { sameHover, jobsBefore, jobsAfter: await app.js(jobCount) },
+    !sameHover.label && !sameHover.rowHighlighted && (await app.js(jobCount)) === jobsBefore && (await stat(join(fixture, 'file2.txt')).then(() => true, () => false))
+  )
+
+  // Again onto the same place: the conflict dialog asks first.
+  await selectRow(join(fixture, 'drag-a.txt'))
+  const againDrag = await app.startDrag(await rowPoint(join(fixture, 'drag-a.txt')), await rowPoint('/config/fixture/file2.txt'))
+  await againDrag.hover()
+  await againDrag.drop()
+  const conflictOnDrop = await app.waitFor(`${textOf(DIALOG)}.includes('"drag-a.txt" already exists')`, 10000)
+  await app.mouseClickButton(DIALOG, 'Cancel')
+  record('UI drag: dropping onto a name that exists asks the conflict question first', '', conflictOnDrop)
+
+  // A file dragged in from outside the app: never navigates, never queues.
+  const outsider = join(scratch, 'outsider.html')
+  await writeFile(outsider, '<!doctype html><title>outsider</title>')
+  const hrefBefore = await app.js('location.href')
+  const remoteArea = await app.js(box(REMOTE))
+  const external = { items: [], files: [outsider], dragOperationsMask: 1 }
+  for (const type of ['dragEnter', 'dragOver', 'drop']) {
+    await app.send('Input.dispatchDragEvent', { type, x: remoteArea.x + remoteArea.w / 2, y: remoteArea.y + remoteArea.h / 2, data: external })
+  }
+  await sleep(800)
+  record(
+    'UI drag: a file dropped from outside the app neither replaces the UI nor starts a transfer',
+    { hrefBefore, hrefAfter: await app.js('location.href') },
+    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'Fly' && (await app.js(jobCount)) === jobsBefore
+  )
+
+  await app.mouseClickButton(PANEL, 'Clear finished')
+  await rm(join(fixture, 'alpha', 'drag-down.txt'))
+  await app.clickMenu('command:focus-local')
+  await app.clickMenu('command:refresh')
 
   if (SHOT_DIR) {
     await app.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 640, deviceScaleFactor: 0, mobile: false })

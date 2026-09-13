@@ -1,6 +1,7 @@
 import { app, shell, session, type BrowserWindow } from 'electron'
 import { URL } from 'node:url'
 import { createLogger } from './logger'
+import { isAllowedNavigation, type NavigationAllowance } from './navigation'
 
 const log = createLogger('security')
 
@@ -40,11 +41,11 @@ export function applyContentSecurityPolicy(): void {
 /**
  * The renderer only ever loads our own UI.
  *
- * In-app navigation to any other origin is blocked, and `target="_blank"` or
- * `window.open` is handed to the user's real browser instead of opening an
- * Electron window with our preload attached.
+ * In-app navigation anywhere else is blocked (including other local files), and
+ * `target="_blank"` or `window.open` is handed to the user's real browser
+ * instead of opening an Electron window with our preload attached.
  */
-export function guardNavigation(window: BrowserWindow, allowedOrigin: string | null): void {
+export function guardNavigation(window: BrowserWindow, allowance: NavigationAllowance): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
     else log.warn('Blocked window.open', { url })
@@ -52,9 +53,7 @@ export function guardNavigation(window: BrowserWindow, allowedOrigin: string | n
   })
 
   window.webContents.on('will-navigate', (event, url) => {
-    const target = new URL(url)
-    const sameOrigin = allowedOrigin !== null && target.origin === allowedOrigin
-    if (sameOrigin || target.protocol === 'file:') return
+    if (isAllowedNavigation(url, allowance)) return
 
     event.preventDefault()
     log.warn('Blocked in-app navigation', { url })

@@ -110,7 +110,8 @@ focus it and use ←/→; double-click resets) — the position is remembered.
 ## Transferring files
 
 Select files and folders and press **Upload** (local pane), **Download** (remote
-pane) or `Cmd+T`. They go to the folder the other pane is showing, which refreshes
+pane) or `Cmd+T` — or **drag them onto the other pane** (onto a folder row to
+transfer into that folder). They go to the folder the other pane is showing, which refreshes
 as they arrive. Folders are copied with everything inside them.
 
 - **The Transfers panel** lists every file: Queued, Running (with progress and

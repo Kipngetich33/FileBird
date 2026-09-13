@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, shell, type OpenDialogOptions } from 'electron'
 import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { IPC_EVENTS } from '../shared/constants/channels'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
@@ -62,6 +63,8 @@ function createMainWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // A file dropped on the window must never replace our UI (already Electron's default; pinned).
+      navigateOnDragDrop: false,
       spellcheck: false
     }
   })
@@ -70,12 +73,13 @@ function createMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => window.show())
 
   if (isDev && rendererUrl !== undefined) {
-    guardNavigation(window, new URL(rendererUrl).origin)
+    guardNavigation(window, { origin: new URL(rendererUrl).origin })
     void window.loadURL(rendererUrl)
     window.webContents.openDevTools({ mode: 'detach' })
   } else {
-    guardNavigation(window, null)
-    void window.loadFile(join(__dirname, '../renderer/index.html'))
+    const indexHtml = join(__dirname, '../renderer/index.html')
+    guardNavigation(window, { exactUrl: pathToFileURL(indexHtml).href })
+    void window.loadFile(indexHtml)
   }
 
   return window

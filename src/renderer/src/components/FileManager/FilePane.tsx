@@ -4,6 +4,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type DragEvent,
   type JSX,
   type KeyboardEvent,
   type ReactNode,
@@ -13,6 +14,7 @@ import type { AppErrorPayload } from '@shared/types/errors'
 import type { FileEntry } from '@shared/types/files'
 import { ConfirmDialog } from '@renderer/components/Connection/ConfirmDialog'
 import type { DirectoryState } from '@renderer/hooks/useDirectory'
+import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type DraggedEntry } from '@renderer/utils/drag'
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
 import { NameDialog } from './NameDialog'
 import { PaneHeader } from './PaneHeader'
@@ -42,6 +44,10 @@ interface FilePaneProps {
   onDismissNotice?: () => void
   /** Create folder, rename and delete for this pane's side; absent for a pane that can't. */
   operations?: PaneOperations
+  /** Which side this pane shows; drags carry it so the other pane can accept them. */
+  side: DragSide
+  /** Rows dragged in from the other pane, dropped into `destination` (Milestone 9). */
+  onDropEntries?: (source: DragSide, entries: DraggedEntry[], destination: string) => void
 }
 
 /**
@@ -63,7 +69,9 @@ export function FilePane({
   actions,
   notice,
   onDismissNotice,
-  operations
+  operations,
+  side,
+  onDropEntries
 }: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
@@ -76,6 +84,68 @@ export function FilePane({
   const [operationBusy, setOperationBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [operationMessage, setOperationMessage] = useState<string | null>(null)
+  /** The folder a drag from the other pane would drop into, while one is over this pane. */
+  const [dropDestination, setDropDestination] = useState<string | null>(null)
+
+  // A drag cancelled or dropped elsewhere must not leave the highlight behind.
+  useEffect(() => {
+    const clear = (): void => setDropDestination(null)
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [])
+
+  function startDrag(entry: FileEntry, event: DragEvent): void {
+    // Dragging a selected row takes the whole selection; any other row becomes the selection.
+    const dragged = selectedPaths.has(entry.path) ? selectedEntries : [entry]
+    if (!selectedPaths.has(entry.path)) select(entry.path)
+    event.dataTransfer.setData(dragType(side), encodeDrag(dragged))
+    event.dataTransfer.effectAllowed = 'copy'
+
+    const chip = document.createElement('div')
+    chip.textContent = dragged.length === 1 ? (dragged[0]?.name ?? '') : `${dragged.length} items`
+    chip.style.cssText =
+      'position:fixed;top:-100px;left:0;padding:3px 8px;border-radius:6px;background:#0284c7;color:white;font:12px system-ui;white-space:nowrap'
+    document.body.appendChild(chip)
+    event.dataTransfer.setDragImage(chip, 12, 12)
+    setTimeout(() => chip.remove(), 0)
+  }
+
+  /** The destination for a drag over this pane, or null when the drag isn't one this pane accepts. */
+  function destinationFor(event: DragEvent): string | null {
+    const source = dragSourceOf([...event.dataTransfer.types])
+    if (onDropEntries === undefined || listing === null || source === null || source === side) return null
+    const folderRow = event.target instanceof Element ? event.target.closest<HTMLElement>('[role="row"][data-kind="directory"]') : null
+    return folderRow?.dataset.path ?? listing.path
+  }
+
+  function onDragOver(event: DragEvent): void {
+    const destination = destinationFor(event)
+    if (destination === null) {
+      event.dataTransfer.dropEffect = 'none'
+      return
+    }
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    if (destination !== dropDestination) setDropDestination(destination)
+  }
+
+  function onDragLeave(event: DragEvent): void {
+    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropDestination(null)
+  }
+
+  function onDrop(event: DragEvent): void {
+    const destination = destinationFor(event)
+    setDropDestination(null)
+    const source = dragSourceOf([...event.dataTransfer.types])
+    if (destination === null || source === null || onDropEntries === undefined) return
+    event.preventDefault()
+    const entries = decodeDrag(event.dataTransfer.getData(dragType(source)))
+    if (entries !== null) onDropEntries(source, entries, destination)
+  }
 
   const startNewFolder = useCallback(() => {
     if (operations === undefined || listing === null) return
@@ -260,10 +330,14 @@ export function FilePane({
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={onActivate}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
         aria-label={`${title} files`}
         data-active={active}
-        className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[#11141b] outline-none transition-colors ${
-          active ? 'border-sky-500/35' : 'border-white/[0.07]'
+        data-drop-active={dropDestination !== null || undefined}
+        className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[#11141b] outline-none transition-colors ${
+          dropDestination !== null ? 'border-sky-400 ring-2 ring-sky-400/40' : active ? 'border-sky-500/35' : 'border-white/[0.07]'
         }`}
       >
         <PaneHeader
@@ -333,12 +407,23 @@ export function FilePane({
               active={active}
               onSelect={select}
               onOpen={openEntry}
+              onDragStart={startDrag}
+              dropTargetPath={dropDestination !== null && dropDestination !== listing.path ? dropDestination : null}
             />
           )}
           {listing !== null && entries.length === 0 && (
             <p className="px-3 py-6 text-center text-[12px] text-zinc-600">This folder is empty.</p>
           )}
         </div>
+
+        {dropDestination !== null && (
+          <div
+            data-testid="drop-label"
+            className="pointer-events-none absolute inset-x-3 bottom-8 truncate rounded-md bg-sky-600 px-3 py-1.5 text-center text-[12px] font-medium text-white shadow-lg"
+          >
+            {side === 'remote' ? 'Upload' : 'Download'} to {dropDestination}
+          </div>
+        )}
 
         <PaneFooter count={listing === null ? null : entries.length} selected={selectedEntries} />
       </section>

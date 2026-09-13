@@ -12,6 +12,7 @@ import { TransferPanel } from '@renderer/components/Transfers/TransferPanel'
 import { useDirectory } from '@renderer/hooks/useDirectory'
 import type { RemoteConnectionState } from '@renderer/hooks/useRemoteConnection'
 import { useTransferQueue } from '@renderer/hooks/useTransferQueue'
+import type { DraggedEntry } from '@renderer/utils/drag'
 import { appService } from '@renderer/services/app.service'
 import { filesService } from '@renderer/services/files.service'
 import { localFilesService } from '@renderer/services/local-files.service'
@@ -89,11 +90,11 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
   const activeRef = useRef<PaneId>(active)
   activeRef.current = active
 
-  /** Sends the entries to the folder the other pane is showing. */
-  function transferEntries(from: PaneId, entries: FileEntry[]): void {
+  /** Sends the entries to the folder the other pane is showing, or to `into` (a drop on a folder). */
+  function transferEntries(from: PaneId, entries: Array<FileEntry | DraggedEntry>, into?: string): void {
     const connection = remote.connection
     const direction = from === 'local' ? 'upload' : 'download'
-    const destination = (from === 'local' ? remoteRef : localRef).current?.currentPath() ?? null
+    const destination = into ?? (from === 'local' ? remoteRef : localRef).current?.currentPath() ?? null
     const transferable = entries.filter((entry) => entry.kind !== 'other')
     if (connection === null) return transfers.refuse('Connect to a server first.')
     if (entries.length === 0) return transfers.refuse(`Select files or folders to ${direction}.`)
@@ -175,6 +176,8 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
               onActivate={() => setActive('local')}
               onSwitchPane={() => remoteRef.current?.focus()}
               operations={localOperations}
+              side="local"
+              onDropEntries={(source, entries, destination) => transferEntries(source, entries, destination)}
               actions={
                 <TransferButton
                   direction="upload"
@@ -194,6 +197,7 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
               onSwitchPane={() => localRef.current?.focus()}
               onDownload={(entries) => transferEntries('remote', entries)}
               activeTransfers={remote.connection === null ? 0 : transfers.activeCountFor(remote.connection.id)}
+              onDropEntries={(source, entries, destination) => transferEntries(source, entries, destination)}
             />
           }
         />

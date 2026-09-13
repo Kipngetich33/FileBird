@@ -3,6 +3,7 @@ import type { ConnectionInfo } from '@shared/types/connection'
 import type { ConnectionInput, ConnectionSummary } from '@shared/types/connections'
 import type { AppErrorPayload } from '@shared/types/errors'
 import type { FileEntry } from '@shared/types/files'
+import type { DragSide, DraggedEntry } from '@renderer/utils/drag'
 import { ConfirmDialog } from '@renderer/components/Connection/ConfirmDialog'
 import { ConnectionForm } from '@renderer/components/Connection/ConnectionForm'
 import { ConnectionList } from '@renderer/components/Connection/ConnectionList'
@@ -40,10 +41,11 @@ interface RemotePaneProps {
   onDownload: (entries: FileEntry[]) => void
   /** Queued or running transfers on the current connection. */
   activeTransfers: number
+  onDropEntries: (source: DragSide, entries: DraggedEntry[], destination: string) => void
 }
 
 /** The right-hand pane: saved connections until connected, then the remote file browser. */
-export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, activeTransfers }: RemotePaneProps): JSX.Element {
+export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, activeTransfers, onDropEntries }: RemotePaneProps): JSX.Element {
   const saved = useConnectionProfiles()
   const connectedPaneRef = useRef<PaneHandle>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -137,6 +139,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
           notice={remote.notice}
           onDismissNotice={remote.dismissNotice}
           onDownload={onDownload}
+          onDropEntries={onDropEntries}
         />
       ) : (
         <section
@@ -292,6 +295,7 @@ interface ConnectedPaneProps {
   notice: string | null
   onDismissNotice: () => void
   onDownload: (entries: FileEntry[]) => void
+  onDropEntries: (source: DragSide, entries: DraggedEntry[], destination: string) => void
 }
 
 function ConnectedPane({
@@ -303,7 +307,8 @@ function ConnectedPane({
   onDisconnect,
   notice,
   onDismissNotice,
-  onDownload
+  onDownload,
+  onDropEntries
 }: ConnectedPaneProps): JSX.Element {
   const source = useMemo<DirectorySource>(
     () => ({
@@ -337,6 +342,8 @@ function ConnectedPane({
       notice={notice}
       onDismissNotice={onDismissNotice}
       operations={operations}
+      side="remote"
+      onDropEntries={onDropEntries}
       actions={
         <>
           <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />

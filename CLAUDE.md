@@ -15,13 +15,14 @@ Targets macOS (primary), Windows, Linux.
 | `docs/MILESTONE-5-PLAN.md` | M5 plan: active pane, application menu, splitter, independence tests. |
 | `docs/MILESTONE-6-PLAN.md` | M6 plan: transfers — throughput research, safe writes, cancel, conflicts. |
 | `docs/MILESTONE-7-PLAN.md` | M7 plan: transfer queue — planning, folders, concurrency, retry, multi-select. |
-| `docs/MILESTONE-8-PLAN.md` | Latest milestone plan: file operations — create folder, rename, delete (Trash locally), guard rails. |
+| `docs/MILESTONE-8-PLAN.md` | M8 plan: file operations — create folder, rename, delete (Trash locally), guard rails. |
+| `docs/MILESTONE-9-PLAN.md` | Latest milestone plan: drag and drop between panes, navigation hardening. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
 ## Current state
 
-**Milestones 1–8 ✅ done — runtime-verified and committed on `main`.**
+**Milestones 1–9 ✅ done — runtime-verified and committed on `main`.**
 
 Two independent panes (Local | Remote) with a resizable, remembered divider, an
 active pane (follows focus; Tab from a list switches), per-pane footers, and a
@@ -37,11 +38,15 @@ speed, Cancel, Retry (rebinds to a reconnected server), Completed/Failed filters
 File operations (M8): New Folder (toolbar, `Cmd/Ctrl+Shift+N`), Rename (`F2`), Delete
 (`Delete`, `Cmd+Backspace` on macOS) — local deletes go to the Trash, remote ones
 are permanent and never follow links; home, root and ancestors are refused in main.
-Verified by `npm test` (376 unit), `npm run test:integration` (62: real OpenSSH,
-Keychain, `ssh`) and `npm run smoke` (105 checks driving the real app).
+Drag and drop (M9): drag rows (the selection) onto the other pane's listing or a
+folder row; it becomes an ordinary queued transfer. Same-pane and external drags
+are refused; navigation is limited to the app's own page.
+Verified by `npm test` (387 unit), `npm run test:integration` (62: real OpenSSH,
+Keychain, `ssh`) and `npm run smoke` (110 checks driving the real app).
 
-Next: **Milestone 9 (Drag and Drop)** — §15: drag local → remote pane uploads,
-remote → local downloads, through the M7 queue.
+Next: **Milestone 10 (Packaging)** — §21, §22: production macOS app, DMG,
+installation instructions, then Windows/Linux. Unsigned builds only; signing or
+publishing needs the user's explicit go-ahead.
 The user asked (2026-09-13) for M6–M10 to proceed without approval stops, using
 Claude's own recommendations; each milestone still gets a plan in `docs/`,
 verification and a commit.
@@ -194,6 +199,19 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   `lstat` at every level, so dropping one `isSymlink` test changed no behaviour.
   Mutate the realistic bug (`stat` instead of `lstat`) instead.
 
+## Testing gotchas added in M9
+
+- **Real drags over CDP:** `Input.setInterceptDrags`, press and move the mouse
+  over a `draggable` row, wait for `Input.dragIntercepted` (it carries the data
+  the page's `dragstart` set), then `Input.dispatchDragEvent` enter/over/drop
+  with that data (`app.startDrag` in smoke). External file drops are
+  `dispatchDragEvent` with `data.files`.
+- **During `dragover` only `dataTransfer.types` are readable**, so the drag type
+  name carries the source side (`application/x-fly-entries+local`).
+- **A dropped file doesn't navigate** because Electron's `navigateOnDragDrop`
+  defaults to false (probed); it's now pinned, and `will-navigate` only allows
+  the app's own URL (it used to allow every `file:` URL).
+
 ## Commands
 
 ```bash
@@ -286,6 +304,11 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   main/preload/renderer split.
 - **`sandbox: true`** forces a CJS preload, which is why `package.json` has no
   `"type": "module"`.
+- **Navigation** is limited to the dev server origin, or exactly the packaged
+  `index.html` (`src/main/navigation.ts`); `navigateOnDragDrop: false` is pinned.
+- **Drag and drop (M9) is between panes only**, as ordinary queued transfers; no
+  drops from Finder/Explorer (would need `webUtils.getPathForFile` + review), no
+  moving within a pane.
 - **One `FileEntry` type for local and remote** (`src/shared/types/files.ts`).
 - **Vitest** for unit tests, not `node:test`: Node's type stripping can't
   resolve this codebase's extensionless imports or path aliases.

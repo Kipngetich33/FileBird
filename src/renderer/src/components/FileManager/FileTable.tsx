@@ -1,4 +1,4 @@
-import { memo, type JSX, type MouseEvent } from 'react'
+import { memo, type DragEvent, type JSX, type MouseEvent } from 'react'
 import type { FileEntry } from '@shared/types/files'
 import { formatModified, formatSize, shortDateFormat, typeLabel } from '@renderer/utils/file-entries'
 import type { SelectMode } from '@renderer/utils/selection'
@@ -21,13 +21,17 @@ interface FileTableProps {
   active: boolean
   onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
+  /** Rows can be dragged to the other pane (Milestone 9). */
+  onDragStart?: (entry: FileEntry, event: DragEvent) => void
+  /** The folder row a drag from the other pane is over. */
+  dropTargetPath?: string | null
 }
 
 /** Shift-click extends from the anchor; Cmd-click (Ctrl on Windows and Linux) toggles. */
 const modeOf = (event: MouseEvent): SelectMode =>
   event.shiftKey ? 'range' : (navigator.platform.startsWith('Mac') ? event.metaKey : event.ctrlKey) ? 'toggle' : 'replace'
 
-export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen }: FileTableProps): JSX.Element {
+export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen, onDragStart, dropTargetPath = null }: FileTableProps): JSX.Element {
   const multiple = selectedPaths.size > 1
   return (
     <div role="grid" aria-label="Files" aria-multiselectable="true" className="@container min-w-0">
@@ -51,9 +55,11 @@ export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect
           entry={entry}
           selected={selectedPaths.has(entry.path)}
           cursor={multiple && entry.path === cursorPath}
+          dropTarget={entry.path === dropTargetPath}
           active={active}
           onSelect={onSelect}
           onOpen={onOpen}
+          onDragStart={onDragStart}
         />
       ))}
     </div>
@@ -65,19 +71,25 @@ interface FileRowProps {
   selected: boolean
   /** Marks the keyboard cursor within a multi-selection. */
   cursor: boolean
+  /** A drag from the other pane would drop into this folder. */
+  dropTarget: boolean
   active: boolean
   onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
+  onDragStart?: (entry: FileEntry, event: DragEvent) => void
 }
 
 // Memoised: moving the selection re-renders the rows that change, not the whole folder.
-const FileRow = memo(function FileRow({ entry, selected, cursor, active, onSelect, onOpen }: FileRowProps): JSX.Element {
+const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, active, onSelect, onOpen, onDragStart }: FileRowProps): JSX.Element {
   return (
     <div
       role="row"
       aria-selected={selected}
       data-path={entry.path}
       data-kind={entry.kind}
+      data-drop-target={dropTarget || undefined}
+      draggable={onDragStart !== undefined}
+      onDragStart={onDragStart === undefined ? undefined : (event) => onDragStart(entry, event)}
       onMouseDown={(event) => {
         // Shift-click would otherwise select the text between rows.
         if (event.shiftKey) event.preventDefault()
@@ -85,7 +97,9 @@ const FileRow = memo(function FileRow({ entry, selected, cursor, active, onSelec
       onClick={(event) => onSelect(entry.path, modeOf(event))}
       onDoubleClick={() => onOpen(entry)}
       className={`${COLUMNS} h-7 cursor-default text-[12px] ${
-        selected
+        dropTarget
+          ? 'bg-sky-500/30 text-zinc-50 outline outline-1 -outline-offset-1 outline-sky-400/70'
+          : selected
           ? active
             ? 'bg-sky-500/20 text-zinc-50'
             : 'bg-white/[0.08] text-zinc-200'
