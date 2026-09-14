@@ -20,6 +20,8 @@ export interface DirectoryState {
   /** Selected entries in display order. */
   selectedEntries: FileEntry[]
   loading: boolean
+  /** The folder whose listing is on its way, so the pane can mark it; null when none is. */
+  loadingPath: string | null
   error: AppErrorPayload | null
   canGoBack: boolean
   open: (path: string) => Promise<void>
@@ -43,16 +45,21 @@ export function useDirectory(source: DirectorySource): DirectoryState {
   const [history, setHistory] = useState<string[]>([])
   const [rawSelection, setSelection] = useState<Selection>(EMPTY_SELECTION)
   const [loading, setLoading] = useState(true)
+  const [loadingPath, setLoadingPath] = useState<string | null>(null)
   const [error, setError] = useState<AppErrorPayload | null>(null)
 
   // Only the most recent request may update state, so a slow listing of one
   // folder can never overwrite a newer listing of another.
   const latestRequest = useRef(0)
+  /** The path of the request in flight, read synchronously so repeated clicks see it at once. */
+  const pathInFlight = useRef<string | null>(null)
 
   const load = useCallback(
     async (path: string): Promise<DirectoryListing | null> => {
       const request = ++latestRequest.current
+      pathInFlight.current = path
       setLoading(true)
+      setLoadingPath(path)
       try {
         const next = await source.listDirectory(path)
         if (request !== latestRequest.current) return null
@@ -63,7 +70,11 @@ export function useDirectory(source: DirectorySource): DirectoryState {
         if (request === latestRequest.current) setError(cause as AppErrorPayload)
         return null
       } finally {
-        if (request === latestRequest.current) setLoading(false)
+        if (request === latestRequest.current) {
+          pathInFlight.current = null
+          setLoading(false)
+          setLoadingPath(null)
+        }
       }
     },
     [source]
@@ -83,6 +94,9 @@ export function useDirectory(source: DirectorySource): DirectoryState {
 
   const open = useCallback(
     async (path: string) => {
+      // Clicking a folder again while it is still loading must not start over:
+      // each new request would throw the one already on its way.
+      if (pathInFlight.current === path) return
       const next = await load(path)
       if (next === null) return
       if (currentPath !== null && currentPath !== next.path) {
@@ -136,6 +150,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     selectedPaths,
     selectedEntries,
     loading,
+    loadingPath,
     error,
     canGoBack: history.length > 0,
     open,

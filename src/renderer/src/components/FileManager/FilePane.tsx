@@ -85,7 +85,7 @@ export function FilePane({
   onTransfer,
   canTransfer = true
 }: FilePaneProps): JSX.Element {
-  const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, error, canGoBack } = directory
+  const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, loadingPath, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
   const paneRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -475,6 +475,7 @@ export function FilePane({
               entries={entries}
               selectedPaths={selectedPaths}
               cursorPath={selectedPath}
+              loadingPath={loadingPath}
               active={active}
               onSelect={select}
               onOpen={openEntry}

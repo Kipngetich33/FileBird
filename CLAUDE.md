@@ -233,6 +233,9 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 - **CDP `clickCount` sets `event.detail`**, so a double-click whose second click
   arrives after the new listing renders is testable (and was mutation-checked).
 - **smoke's `selectRow` right-clicks folders**, since a plain click now opens them.
+- **Counting IPC requests:** smoke wraps `ipcMain._invokeHandlers.get('sftp:list-directory')`
+  (Electron-internal) through the inspector to count listings; the check fails loudly
+  (`listCounter` ≠ `'counting'`) if an Electron upgrade renames it.
 
 ## Testing gotchas added in M10
 
@@ -411,6 +414,10 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   Upload/Download, New Folder, Rename…, Move to Trash…/Delete…, Refresh). The renderer
   sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
   validates the request and pops up `Menu`. Moving items is still not implemented.
+- **A folder being opened says so** (user request, 2026-09-14): `useDirectory.loadingPath`
+  marks its row (`aria-busy`, spinner + "Opening…", shown after 150 ms via
+  `.reveal-after-delay` so quick loads don't flash). Opening a folder whose listing is
+  already in flight is ignored, since each new request discarded the one on its way.
 - **CSP is production-only** — the Vite dev server needs inline styles and a
   websocket; locking those down would break `npm run dev` without making the
   shipped app safer. Verified enforced in the packaged app (M10).

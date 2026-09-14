@@ -204,6 +204,20 @@ async function launchApp() {
   // isn't, and it can't take focus itself), so have the page act focused.
   await send('Emulation.setFocusEmulationEnabled', { enabled: true })
 
+  // Counts the folder listings the renderer asks the server for, so a check can
+  // see that clicking a folder again while it loads doesn't ask again.
+  const listCounter = await mainEval(`(() => {
+    const handlers = process.mainModule.require('electron').ipcMain._invokeHandlers
+    const original = handlers?.get('sftp:list-directory')
+    if (typeof original !== 'function') return 'missing'
+    globalThis.__smokeListCalls = []
+    handlers.set('sftp:list-directory', (event, ...args) => {
+      globalThis.__smokeListCalls.push(args[1])
+      return original(event, ...args)
+    })
+    return 'counting'
+  })()`)
+
   // Native menus can't be driven over CDP: record each right-click menu Fly
   // pops up, and choose from it by label, as a person would.
   await mainEval(`(() => {
@@ -222,6 +236,7 @@ async function launchApp() {
 
   const self = {
     splash,
+    listCounter,
     send,
     js,
     mainEval,
@@ -1416,6 +1431,27 @@ try {
   try {
     await app.doubleClick(rowFor('/config/fixture/alpha'))
     const remoteLoading = await app.waitFor(`${textOf(`${REMOTE} [data-testid="pane-path"]`)} === '/config/fixture' && ${textOf(REMOTE)}.includes('Loading')`)
+
+    // The folder being opened says so once the wait is noticeable, and clicking it
+    // again (as an impatient person would) doesn't ask the server again.
+    const ROW_LOADING = `${rowFor('/config/fixture/alpha')} [data-testid="row-loading"]`
+    const rowLoading = await app.waitFor(
+      `document.querySelector(${q(rowFor('/config/fixture/alpha'))})?.getAttribute('aria-busy') === 'true' && ${textOf(ROW_LOADING)}.includes('Opening') && getComputedStyle(document.querySelector(${q(ROW_LOADING)})).opacity === '1'`
+    )
+    const otherRowsLoading = await app.js(`document.querySelectorAll(${q(`${REMOTE} [data-testid="row-loading"]`)}).length`)
+    await app.screenshot('13-remote-folder-opening')
+    const listCallsBefore = await app.mainEval('globalThis.__smokeListCalls?.length ?? -1')
+    for (let click = 0; click < 3; click++) {
+      const point = await rowCentre('/config/fixture/alpha')
+      await app.mouseClick(point.x, point.y)
+      await sleep(200)
+    }
+    const repeatListCalls = (await app.mainEval('globalThis.__smokeListCalls?.length ?? -1')) - listCallsBefore
+    record(
+      'loading: the remote folder being opened shows "Opening…", and clicking it again while it loads sends no new request',
+      { rowLoading, otherRowsLoading, listCounter: app.listCounter, listCallsBefore, repeatListCalls },
+      rowLoading && otherRowsLoading === 1 && app.listCounter === 'counting' && listCallsBefore > 0 && repeatListCalls === 0
+    )
     await app.doubleClick(rowFor(join(fixture, 'alpha')))
     const localOpened = await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`)
     await app.js(`document.querySelector(${q(`${LOCAL} button[aria-label="Back"]`)}).click()`)
@@ -1428,6 +1464,11 @@ try {
     await server.unpause()
   }
   const remoteCaughtUp = await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture/alpha'`, 15000)
+  record(
+    'loading: the marker goes once the folder has opened',
+    await app.js(`document.querySelectorAll('[data-testid="row-loading"], [aria-busy="true"]').length`),
+    remoteCaughtUp && (await app.js(`document.querySelectorAll('[data-testid="row-loading"], [aria-busy="true"]').length`)) === 0
+  )
   record(
     'independence: while the server is frozen mid-listing, the local pane still opens, goes back and refreshes',
     { ...independence, remoteCaughtUp },

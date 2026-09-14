@@ -17,6 +17,8 @@ interface FileTableProps {
   selectedPaths: ReadonlySet<string>
   /** The keyboard cursor row. */
   cursorPath: string | null
+  /** The folder being opened, marked while its listing is on its way. */
+  loadingPath?: string | null
   /** An inactive pane shows its selection muted, so only one pane looks "live". */
   active: boolean
   onSelect: (path: string, mode: SelectMode) => void
@@ -33,7 +35,18 @@ interface FileTableProps {
 const modeOf = (event: MouseEvent): SelectMode =>
   event.shiftKey ? 'range' : (navigator.platform.startsWith('Mac') ? event.metaKey : event.ctrlKey) ? 'toggle' : 'replace'
 
-export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect, onOpen, onDragStart, onContextMenu, dropTargetPath = null }: FileTableProps): JSX.Element {
+export function FileTable({
+  entries,
+  selectedPaths,
+  cursorPath,
+  loadingPath = null,
+  active,
+  onSelect,
+  onOpen,
+  onDragStart,
+  onContextMenu,
+  dropTargetPath = null
+}: FileTableProps): JSX.Element {
   const multiple = selectedPaths.size > 1
   return (
     <div role="grid" aria-label="Files" aria-multiselectable="true" className="@container min-w-0">
@@ -58,6 +71,7 @@ export function FileTable({ entries, selectedPaths, cursorPath, active, onSelect
           selected={selectedPaths.has(entry.path)}
           cursor={multiple && entry.path === cursorPath}
           dropTarget={entry.path === dropTargetPath}
+          loading={entry.path === loadingPath}
           active={active}
           onSelect={onSelect}
           onOpen={onOpen}
@@ -76,6 +90,8 @@ interface FileRowProps {
   cursor: boolean
   /** A drag from the other pane would drop into this folder. */
   dropTarget: boolean
+  /** This folder is being opened. */
+  loading: boolean
   active: boolean
   onSelect: (path: string, mode: SelectMode) => void
   onOpen: (entry: FileEntry) => void
@@ -84,7 +100,7 @@ interface FileRowProps {
 }
 
 // Memoised: moving the selection re-renders the rows that change, not the whole folder.
-const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, active, onSelect, onOpen, onDragStart, onContextMenu }: FileRowProps): JSX.Element {
+const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, loading, active, onSelect, onOpen, onDragStart, onContextMenu }: FileRowProps): JSX.Element {
   return (
     <div
       role="row"
@@ -92,6 +108,7 @@ const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, act
       data-path={entry.path}
       data-kind={entry.kind}
       data-drop-target={dropTarget || undefined}
+      aria-busy={loading || undefined}
       draggable={onDragStart !== undefined}
       onDragStart={onDragStart === undefined ? undefined : (event) => onDragStart(entry, event)}
       onMouseDown={(event) => {
@@ -116,7 +133,7 @@ const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, act
               onContextMenu(entry)
             }
       }
-      className={`${COLUMNS} h-7 cursor-default text-[12px] ${
+      className={`${COLUMNS} h-7 ${loading ? 'cursor-progress' : 'cursor-default'} text-[12px] ${
         dropTarget
           ? 'bg-sky-500/30 text-zinc-50 outline outline-1 -outline-offset-1 outline-sky-400/70'
           : selected
@@ -129,6 +146,15 @@ const FileRow = memo(function FileRow({ entry, selected, cursor, dropTarget, act
       <span role="gridcell" className="flex min-w-0 items-center gap-2">
         <EntryIcon entry={entry} />
         <span className="truncate">{entry.name}</span>
+        {loading && (
+          // Shown only once the wait is noticeable, so a quick folder doesn't flash it.
+          <span data-testid="row-loading" className="reveal-after-delay flex shrink-0 items-center gap-1 text-[11px] text-sky-300">
+            <svg viewBox="0 0 16 16" className="h-3 w-3 animate-spin fill-none stroke-current stroke-2 motion-reduce:animate-none" aria-hidden>
+              <path d="M14 8a6 6 0 1 1-6-6" strokeLinecap="round" />
+            </svg>
+            Opening…
+          </span>
+        )}
       </span>
       <span role="gridcell" className="hidden truncate text-zinc-500 @2xl:block">
         {typeLabel(entry)}

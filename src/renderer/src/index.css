@@ -22,6 +22,18 @@ body {
   user-select: none;
 }
 
+/* Appears only after a short wait, so something that finishes quickly never flashes it. */
+.reveal-after-delay {
+  opacity: 0;
+  animation: reveal 1ms linear 150ms forwards;
+}
+
+@keyframes reveal {
+  to {
+    opacity: 1;
+  }
+}
+
 /* Electron window drag regions (macOS hiddenInset title bar). */
 .drag-region {
   -webkit-app-region: drag;
