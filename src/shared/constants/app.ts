@@ -4,4 +4,4 @@
  * the keychain namespaces ("Fly", "Fly (development)") and file and drag type
  * names, because changing them would orphan saved connections and passwords.
  */
-export const APP_NAME = 'FileFly'
+export const APP_NAME = 'FileBird'

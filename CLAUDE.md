@@ -47,7 +47,7 @@ Packaging (M10): `npm run build:mac|win|linux` → `release/` (DMGs arm64 + x64,
 NSIS x64, AppImage x64); ad-hoc signed only, fuses flipped, production CSP;
 `npm run verify:package` checks a build and runs the x64 `.app` against a test
 server. Asks before quitting/closing with active transfers.
-After M10 (user requests, 2026-09-14): the product is named **FileFly**; a 6-second
+After M10 (user requests, 2026-09-14): the product is named **FileBird**; a 6-second
 animated start screen (`splash-window.ts`, `renderer/splash.html`) floats over other
 apps, then restores the Dock icon and menu bar; a bird Dock icon; a plain click opens
 a folder and right-click shows a native context menu; a folder being opened says so.
@@ -276,7 +276,7 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 
 ```bash
 npm run dev               # Electron + Vite, hot reload (dev/start/preview go through scripts/electron-vite.mjs: on macOS
-                          # they run a FileFly-named copy of Electron.app in node_modules/.cache, so the Dock says FileFly)
+                          # they run a FileBird-named copy of Electron.app in node_modules/.cache, so the Dock says FileBird)
 npm run build             # typecheck, then build main/preload/renderer
 npm run typecheck         # both TS projects
 npm test                  # Vitest unit tests (src/**/*.test.ts)
@@ -286,7 +286,7 @@ npm run smoke             # CDP (+ main-process inspector) end-to-end test on th
                           # SMOKE_SCREENSHOT_DIR=<dir> also saves screenshots
 npm run test-server -- up # a local OpenSSH server for trying the app by hand (also: status, down)
 npm run build:mac         # DMGs (arm64 + x64) → release/   (build:win → NSIS x64, build:linux → AppImage x64)
-npm run verify:package -- release/mac/FileFly.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
+npm run verify:package -- release/mac/FileBird.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
 ```
 
 ## Architecture
@@ -365,7 +365,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 
 ### Decisions taken — do not re-litigate
 
-- **The product is called FileFly** (user request, 2026-09-14): `APP_NAME` in
+- **The product is called FileBird** (user request, 2026-09-14): `APP_NAME` in
   `src/shared/constants/app.ts` for every name shown in code, plus `productName` in
   `electron-builder.yml`, the page `<title>`, README and the DMG's install notes.
   **Internal identifiers keep "fly" on purpose**: app id `com.titansoft.fly`, the

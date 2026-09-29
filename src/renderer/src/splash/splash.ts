@@ -18,7 +18,7 @@ import {
 import './splash.css'
 
 /**
- * The start screen (FileFly): a stream of light between a glowing base at the
+ * The start screen (FileBird): a stream of light between a glowing base at the
  * bottom left (this computer) and one at the top right (the server), with a
  * bird carrying a packet out and back. Shown by the main process for a few
  * seconds while the app loads; the duration arrives in the URL.

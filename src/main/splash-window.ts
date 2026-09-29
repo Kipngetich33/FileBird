@@ -18,7 +18,7 @@ export interface Splash {
 }
 
 /**
- * The FileFly start screen: a borderless, transparent window in the middle of
+ * The FileBird start screen: a borderless, transparent window in the middle of
  * the screen, shown while the main window loads out of sight. It has no
  * preload, so its page can do nothing but draw.
  */
@@ -40,7 +40,7 @@ export function openSplash(options: { rendererUrl: string | undefined; durationM
     // Above other apps' windows even when Fly isn't the active app yet, as it
     // isn't when launched from a terminal.
     alwaysOnTop: true,
-    title: 'FileFly',
+    title: 'FileBird',
     backgroundColor: '#00000000',
     webPreferences: {
       contextIsolation: true,

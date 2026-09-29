@@ -238,7 +238,7 @@ void app.whenReady().then(() => {
   }
   showDevDockIcon()
 
-  // The FileFly start screen shows while the main window loads out of sight.
+  // The FileBird start screen shows while the main window loads out of sight.
   const splashMs = splashDuration({ isPackaged: app.isPackaged, override: process.env['FLY_SPLASH_MS'] })
   const splash = splashMs > 0 ? openSplash({ rendererUrl: isDev ? rendererUrl : undefined, durationMs: splashMs }) : null
   createMainWindow(splash === null ? undefined : (window) => void splash.handOff(window).then(showDevDockIcon))

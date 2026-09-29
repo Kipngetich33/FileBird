@@ -25,7 +25,7 @@ describe('stopTransfersQuestion', () => {
 
   it('asks before quitting, with Cancel as the default', () => {
     expect(stopTransfersQuestion(3, 'quit')).toMatchObject({
-      message: 'Quit FileFly and cancel 3 transfers?',
+      message: 'Quit FileBird and cancel 3 transfers?',
       buttons: ['Cancel', 'Quit'],
       defaultId: 0,
       cancelId: 0

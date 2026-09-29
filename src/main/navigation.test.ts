@@ -11,9 +11,9 @@ describe('isAllowedNavigation', () => {
   })
 
   it('allows only the packaged index.html, ignoring a hash', () => {
-    const packaged = { exactUrl: 'file:///Applications/FileFly.app/Contents/Resources/app.asar/out/renderer/index.html' }
-    expect(isAllowedNavigation('file:///Applications/FileFly.app/Contents/Resources/app.asar/out/renderer/index.html', packaged)).toBe(true)
-    expect(isAllowedNavigation('file:///Applications/FileFly.app/Contents/Resources/app.asar/out/renderer/index.html#top', packaged)).toBe(true)
+    const packaged = { exactUrl: 'file:///Applications/FileBird.app/Contents/Resources/app.asar/out/renderer/index.html' }
+    expect(isAllowedNavigation('file:///Applications/FileBird.app/Contents/Resources/app.asar/out/renderer/index.html', packaged)).toBe(true)
+    expect(isAllowedNavigation('file:///Applications/FileBird.app/Contents/Resources/app.asar/out/renderer/index.html#top', packaged)).toBe(true)
     expect(isAllowedNavigation('file:///Users/me/Downloads/dropped.html', packaged)).toBe(false)
     expect(isAllowedNavigation('https://example.org/', packaged)).toBe(false)
     expect(isAllowedNavigation('not a url', packaged)).toBe(false)

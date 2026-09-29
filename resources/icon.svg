@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- The FileFly bird, climbing. Its shapes match src/renderer/src/splash/bird.ts. -->
+  <!-- The FileBird bird, climbing. Its shapes match src/renderer/src/splash/bird.ts. -->
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="0.35" y2="1">
       <stop offset="0" stop-color="#15204a"/>

@@ -8,7 +8,7 @@
 // Windows / Linux (the unpacked folder electron-builder leaves in release/):
 // static checks only — fuses, the keychain binary, executable format.
 //
-//   npm run verify:package -- release/mac/FileFly.app        # default on an Intel Mac
+//   npm run verify:package -- release/mac/FileBird.app        # default on an Intel Mac
 //   npm run verify:package -- release/win-unpacked
 //   npm run verify:package -- release/linux-unpacked
 import { execFile, spawn } from 'node:child_process'
@@ -28,9 +28,9 @@ const q = (value) => JSON.stringify(value)
 const DEBUG_PORT = 9261
 const INSPECT_PORT = 9263
 
-const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'FileFly.app')
-const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'FileFly.exe')) ? 'win32' : 'linux'
-const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'FileFly') : join(appPath, platform === 'win32' ? 'FileFly.exe' : 'fly')
+const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'FileBird.app')
+const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'FileBird.exe')) ? 'win32' : 'linux'
+const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'FileBird') : join(appPath, platform === 'win32' ? 'FileBird.exe' : 'fly')
 const unpacked =
   platform === 'darwin'
     ? join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')

@@ -98,7 +98,7 @@ async function launchApp() {
   child.stdout.on('data', (d) => mainLogs.push(d.toString()))
   child.stderr.on('data', (d) => mainLogs.push(d.toString()))
 
-  // Two pages appear at launch: the FileFly start screen and the (still hidden) main window.
+  // Two pages appear at launch: the FileBird start screen and the (still hidden) main window.
   let page
   const splash = { seen: false, wordmark: null, canvas: false }
   for (let i = 0; i < 60 && (!page || !splash.seen); i++) {
@@ -473,9 +473,9 @@ try {
 
   app = await launchApp()
   record(
-    'start screen: FileFly shows its animated start screen first, floating over other apps and Spaces, then hands over to the main window after about 6 seconds, with the Dock icon and menu bar back',
+    'start screen: FileBird shows its animated start screen first, floating over other apps and Spaces, then hands over to the main window after about 6 seconds, with the Dock icon and menu bar back',
     app.splash,
-    app.splash.seen && app.splash.wordmark === 'FileFly' && app.splash.canvas && app.splash.mainShownAfter !== null && app.splash.mainShownAfter >= 5800 &&
+    app.splash.seen && app.splash.wordmark === 'FileBird' && app.splash.canvas && app.splash.mainShownAfter !== null && app.splash.mainShownAfter >= 5800 &&
       app.splash.floating === JSON.stringify({ onTop: true, allSpaces: true }) && app.splash.dockVisibleAfter
   )
   const rendered = await app.waitFor(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length > 0`)
@@ -1402,7 +1402,7 @@ try {
   record(
     'UI drag: a file dropped from outside the app neither replaces the UI nor starts a transfer',
     { hrefBefore, hrefAfter: await app.js('location.href') },
-    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'FileFly' && (await app.js(jobCount)) === jobsBefore
+    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'FileBird' && (await app.js(jobCount)) === jobsBefore
   )
 
   // Upload chosen from a right-click menu goes through the same queue.
@@ -1732,7 +1732,7 @@ try {
   record(
     'quit: with a transfer running, closing the window and quitting both ask first; Cancel keeps the app and the transfer',
     { questions, closeKept, quitKept },
-    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit FileFly and cancel 1 transfer?']) && closeKept && quitKept
+    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit FileBird and cancel 1 transfer?']) && closeKept && quitKept
   )
 
   await app.mainEval('globalThis.__answer = 1')

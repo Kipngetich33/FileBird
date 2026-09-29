@@ -1,8 +1,8 @@
-// Runs electron-vite (dev or preview) with Electron presented as FileFly on macOS.
+// Runs electron-vite (dev or preview) with Electron presented as FileBird on macOS.
 //
 // macOS names a running app in the Dock and the menu bar after its bundle, and
 // unpackaged runs use node_modules' Electron.app, so they read "Electron". This
-// keeps a copy named FileFly, with the app icon, in node_modules/.cache and
+// keeps a copy named FileBird, with the app icon, in node_modules/.cache and
 // points electron-vite at it (ELECTRON_EXEC_PATH). The original Electron.app,
 // which the smoke and integration tests launch, is left as it is.
 //
@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const NAME = 'FileFly'
+const NAME = 'FileBird'
 const BUNDLE_ID = 'com.titansoft.fly.dev'
 const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 
@@ -26,12 +26,12 @@ function run(command, args) {
   execFileSync(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
 }
 
-/** Returns the FileFly copy's executable, making the copy first if Electron or the icon changed. */
+/** Returns the FileBird copy's executable, making the copy first if Electron or the icon changed. */
 function fileFlyElectron() {
   const electronDir = dirname(require.resolve('electron'))
   const source = join(electronDir, 'dist', 'Electron.app')
   const icon = join(root, 'resources', 'icon.png')
-  const folder = join(root, 'node_modules', '.cache', 'filefly-dev')
+  const folder = join(root, 'node_modules', '.cache', 'filebird-dev')
   const app = join(folder, `${NAME}.app`)
   const executable = join(app, 'Contents', 'MacOS', 'Electron')
   const stampFile = join(folder, 'stamp')
@@ -55,11 +55,11 @@ function fileFlyElectron() {
     run('sips', ['-z', String(size), String(size), icon, '--out', join(iconset, `icon_${size}x${size}.png`)])
     run('sips', ['-z', String(size * 2), String(size * 2), icon, '--out', join(iconset, `icon_${size}x${size}@2x.png`)])
   }
-  run('iconutil', ['-c', 'icns', iconset, '-o', join(app, 'Contents', 'Resources', 'filefly.icns')])
+  run('iconutil', ['-c', 'icns', iconset, '-o', join(app, 'Contents', 'Resources', 'filebird.icns')])
   rmSync(dirname(iconset), { recursive: true, force: true })
 
   const plist = join(app, 'Contents', 'Info.plist')
-  for (const [key, value] of [['CFBundleName', NAME], ['CFBundleDisplayName', NAME], ['CFBundleIdentifier', BUNDLE_ID], ['CFBundleIconFile', 'filefly.icns']]) {
+  for (const [key, value] of [['CFBundleName', NAME], ['CFBundleDisplayName', NAME], ['CFBundleIdentifier', BUNDLE_ID], ['CFBundleIconFile', 'filebird.icns']]) {
     run('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
   }
   // Apple Silicon only runs signed code, and editing Info.plist breaks a bundle's signature.
