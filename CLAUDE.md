@@ -275,8 +275,9 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 ## Commands
 
 ```bash
-npm run dev               # Electron + Vite, hot reload (dev/start/preview go through scripts/electron-vite.mjs: on macOS
-                          # they run a FileBird-named copy of Electron.app in node_modules/.cache, so the Dock says FileBird)
+npm run dev               # Electron + Vite, hot reload
+                          # (postinstall + every dev run call scripts/dev-app-name.mjs, which names node_modules'
+                          #  Electron.app after the app and gives it the icon, so the Dock never says "Electron")
 npm run build             # typecheck, then build main/preload/renderer
 npm run typecheck         # both TS projects
 npm test                  # Vitest unit tests (src/**/*.test.ts)
