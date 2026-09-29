@@ -85,6 +85,9 @@ class FakeProvider implements SftpProvider {
   removeDirectory(): Promise<void> {
     throw new Error('not used')
   }
+  openShell(): Promise<never> {
+    throw new Error('not used')
+  }
   remove(): Promise<void> {
     throw new Error('not used')
   }

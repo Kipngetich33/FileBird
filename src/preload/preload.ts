@@ -12,6 +12,7 @@ import type { DirectoryListing } from '../shared/types/files'
 import type { DeleteOutcome, FileTarget } from '../shared/types/file-operations'
 import type { ContextMenuAction, ContextMenuItem } from '../shared/types/context-menu'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
+import type { TerminalDataEvent, TerminalExitEvent, TerminalOpenInput, TerminalOpened } from '../shared/types/terminal'
 import type { StartTransferOutcome, StartTransferRequest, TransferJob, TransferQueueUpdate } from '../shared/types/transfers'
 import type { SystemVersions } from '../shared/types/system'
 
@@ -89,6 +90,34 @@ const api = {
       ipcRenderer.on(IPC_EVENTS.TRANSFER_UPDATE, forward)
       return () => {
         ipcRenderer.removeListener(IPC_EVENTS.TRANSFER_UPDATE, forward)
+      }
+    }
+  },
+  terminals: {
+    /** Opens a shell for a pane and returns its session id. */
+    open: (input: TerminalOpenInput): Promise<TerminalOpened> => ipcRenderer.invoke(IPC.TERMINAL_OPEN, input),
+    /** Keystrokes, as bytes: text would break a character split across two chunks. */
+    write: (id: string, data: Uint8Array): Promise<void> => ipcRenderer.invoke(IPC.TERMINAL_WRITE, id, data),
+    resize: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke(IPC.TERMINAL_RESIZE, id, cols, rows),
+    /** How much output the terminal has drawn, which is what lets a paused shell continue. */
+    acknowledge: (id: string, chars: number): Promise<void> => ipcRenderer.invoke(IPC.TERMINAL_ACK, id, chars),
+    close: (id: string): Promise<void> => ipcRenderer.invoke(IPC.TERMINAL_CLOSE, id),
+    /** True while a terminal has focus, so file commands give up their keys. */
+    setFocus: (focused: boolean): Promise<void> => ipcRenderer.invoke(IPC.TERMINAL_SET_FOCUS, focused),
+    /** Returns an unsubscribe function. The listener receives the payload only. */
+    onData: (listener: (event: TerminalDataEvent) => void): (() => void) => {
+      const forward = (_event: IpcRendererEvent, payload: TerminalDataEvent): void => listener(payload)
+      ipcRenderer.on(IPC_EVENTS.TERMINAL_DATA, forward)
+      return () => {
+        ipcRenderer.removeListener(IPC_EVENTS.TERMINAL_DATA, forward)
+      }
+    },
+    /** Returns an unsubscribe function. */
+    onExit: (listener: (event: TerminalExitEvent) => void): (() => void) => {
+      const forward = (_event: IpcRendererEvent, payload: TerminalExitEvent): void => listener(payload)
+      ipcRenderer.on(IPC_EVENTS.TERMINAL_EXIT, forward)
+      return () => {
+        ipcRenderer.removeListener(IPC_EVENTS.TERMINAL_EXIT, forward)
       }
     }
   },

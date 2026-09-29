@@ -17,7 +17,8 @@ Targets macOS (primary), Windows, Linux.
 | `docs/MILESTONE-7-PLAN.md` | M7 plan: transfer queue — planning, folders, concurrency, retry, multi-select. |
 | `docs/MILESTONE-8-PLAN.md` | M8 plan: file operations — create folder, rename, delete (Trash locally), guard rails. |
 | `docs/MILESTONE-9-PLAN.md` | M9 plan: drag and drop between panes, navigation hardening. |
-| `docs/MILESTONE-10-PLAN.md` | Latest milestone plan: packaging — DMGs, Windows/Linux cross-builds, fuses, verification. |
+| `docs/MILESTONE-10-PLAN.md` | M10 plan: packaging — DMGs, Windows/Linux cross-builds, fuses, verification. |
+| `docs/MILESTONE-11-PLAN.md` | Latest milestone plan: terminals — a shell in each pane, flow control, node-pty packaging. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
@@ -49,10 +50,15 @@ server. Asks before quitting/closing with active transfers.
 After M10 (user requests, 2026-09-14): the product is named **FileFly**; a 6-second
 animated start screen (`splash-window.ts`, `renderer/splash.html`) floats over other
 apps, then restores the Dock icon and menu bar; a bird Dock icon; a plain click opens
-a folder and right-click shows a native context menu.
-Verified by `npm test` (417 unit), `npm run test:integration` (62: real OpenSSH,
-Keychain, `ssh`), `npm run smoke` (122 checks driving the real app) and
-`npm run verify:package` (15 checks on the packaged app).
+a folder and right-click shows a native context menu; a folder being opened says so.
+Terminals (M11, 2026-09-29): each pane has **Files / Terminal** tabs (`Cmd/Ctrl+\``).
+The remote terminal is a second channel on the connection that is already open; the
+local one is a real pty through `node-pty` (prebuilt, nothing compiled). Sessions
+live in main (`src/main/terminal/`), output is batched and flow-controlled, and
+terminal bytes are never logged.
+Verified by `npm test` (438 unit), `npm run test:integration` (67: real OpenSSH,
+Keychain, `ssh`), `npm run smoke` (132 checks driving the real app) and
+`npm run verify:package` (17 checks on the packaged app).
 
 Next: **the user's review** of M6–M10. Not done without their explicit go-ahead:
 Developer ID signing/notarisation, publishing, importing their real
@@ -233,6 +239,15 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 - **CDP `clickCount` sets `event.detail`**, so a double-click whose second click
   arrives after the new listing renders is testable (and was mutation-checked).
 - **smoke's `selectRow` right-clicks folders**, since a plain click now opens them.
+- **`aria-selected` is not only for rows** now that panes have tabs: checks that
+  count the selection must ask for `[role="row"][aria-selected="true"]`.
+- **Driving a terminal over CDP:** focus `.xterm-helper-textarea`, `Input.insertText`,
+  then an Enter key event; read what it shows from `.xterm-rows` `innerText`.
+- **ssh2's `setWindow` takes rows before columns** — the opposite of xterm's
+  `resize(cols, rows)`. The integration test checks `stty size` after a resize.
+- **node-pty needs no rebuild** (Node-API prebuilds), but its `spawn-helper` has no
+  file extension, so `asarUnpack: '**/*.node'` alone leaves it inside the asar and
+  every spawn fails in the packaged app only; `verify:package` checks it.
 - **Counting IPC requests:** smoke wraps `ipcMain._invokeHandlers.get('sftp:list-directory')`
   (Electron-internal) through the inspector to count listings; the check fails loudly
   (`listCounter` ≠ `'counting'`) if an Electron upgrade renames it.
@@ -291,6 +306,7 @@ src/
 │   ├── ssh/        private-key reading/inspection · ~/.ssh/config scan + ssh -G resolution
 │   ├── secrets/    SecretStore interface · OS keychain implementation (@napi-rs/keyring)
 │   └── storage/    JsonDocument (atomic, 0600) · connections.json
+│   ├── terminal/   shell sessions (local pty + SSH channel), output batching, flow control
 ├── preload/    the ONLY bridge — hand-written, per-method
 ├── renderer/   React app (components/ pages/ hooks/ services/)
 └── shared/     types + IPC channel constants used by both sides
@@ -318,6 +334,8 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Never log credentials.** `logger.ts` redacts keys matching
   password/passphrase/privateKey/secret/token — and the smoke test fails if the
   test password appears anywhere in the main-process output.
+- **Never log anything a terminal carries**, at any level: its output holds
+  passwords, keys and whole environments (smoke-tested with typed markers).
 - **Secrets live only in the OS keychain** (via `SecretStore`), are saved only
   after the server accepts them, and never reach `connections.json`, the log, or
   the renderer (smoke-tested, mutation-checked).
@@ -414,6 +432,17 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   Upload/Download, New Folder, Rename…, Move to Trash…/Delete…, Refresh). The renderer
   sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
   validates the request and pops up `Menu`. Moving items is still not implemented.
+- **Terminals (M11):** one shell per pane, as tabs beside the files. The remote
+  shell is a channel on the live connection (`SftpProvider.openShell` → ssh2
+  `client.shell`), so no second login; closing it ends that channel only, never
+  the connection. Terminals are capped (3 per connection, 8 in all) because a
+  server allows ~10 channels and transfers use up to four. The local shell is
+  `node-pty`, loaded lazily in a try/catch so a missing binary disables only the
+  terminal. Bytes cross the bridge (not text), batched every 5 ms, paused above
+  100k unacknowledged characters and resumed below 5k. The folder is set once, at
+  open; nothing is ever typed into a running shell. While a terminal has focus the
+  menu's file commands are disabled, so their keys reach the shell
+  (`TERMINAL_SUPPRESSED_COMMANDS`).
 - **A folder being opened says so** (user request, 2026-09-14): `useDirectory.loadingPath`
   marks its row (`aria-busy`, spinner + "Opening…", shown after 150 ms via
   `.reveal-after-delay` so quick loads don't flash). Opening a folder whose listing is

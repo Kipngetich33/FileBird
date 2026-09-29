@@ -201,6 +201,108 @@ describe('Ssh2SftpProvider against OpenSSH', () => {
       await server.unpause()
     }
   })
+  describe('an interactive shell on the same connection', () => {
+    /** Collects a shell's output, so a test can wait for what a command printed. */
+    function harness() {
+      const chunks: Buffer[] = []
+      const ends: Array<{ code: number | null; signal: string | null }> = []
+      return {
+        ends,
+        text: (): string => Buffer.concat(chunks).toString('utf8'),
+        handlers: {
+          onData: (chunk: Buffer) => chunks.push(chunk),
+          onClose: (end: { code: number | null; signal: string | null }) => ends.push(end)
+        },
+        async waitFor(needle: string, ms = 15_000): Promise<boolean> {
+          const deadline = Date.now() + ms
+          while (Date.now() < deadline) {
+            if (Buffer.concat(chunks).toString('utf8').includes(needle)) return true
+            await sleep(100)
+          }
+          return false
+        }
+      }
+    }
+
+    const type = (shell: { write: (data: Uint8Array) => void }, line: string): void => {
+      shell.write(new Uint8Array(Buffer.from(`${line}\n`, 'utf8')))
+    }
+
+    it('runs a command in a real terminal and reports how it ended', async () => {
+      const { provider, connected } = connectTo(server)
+      await connected
+      const out = harness()
+      const shell = await provider.openShell({ cols: 80, rows: 24, handlers: out.handlers })
+
+      type(shell, 'echo FLY-SHELL-$((6*7))')
+      expect(await out.waitFor('FLY-SHELL-42')).toBe(true)
+      // A pty, not a plain command channel: this is what `sudo`, `top` and `vim` need.
+      type(shell, 'tty; echo TERM-IS-$TERM')
+      expect(await out.waitFor('TERM-IS-xterm-256color')).toBe(true)
+      expect(out.text()).toMatch(/\/dev\/pts\/\d+/)
+
+      type(shell, 'exit 7')
+      await out.waitFor('__never__', 3_000)
+      expect(out.ends).toEqual([{ code: 7, signal: null }])
+      await provider.disconnect()
+    })
+
+    it('tells the shell its size, first and after a resize', async () => {
+      const { provider, connected } = connectTo(server)
+      await connected
+      const out = harness()
+      const shell = await provider.openShell({ cols: 100, rows: 30, handlers: out.handlers })
+
+      type(shell, 'stty size')
+      expect(await out.waitFor('30 100')).toBe(true)
+      shell.resize(120, 40)
+      await sleep(300)
+      type(shell, 'stty size')
+      expect(await out.waitFor('40 120')).toBe(true)
+
+      shell.close()
+      await provider.disconnect()
+    })
+
+    it('leaves the connection working when a shell closes, and opens another afterwards', async () => {
+      const { provider, connected } = connectTo(server)
+      await connected
+      const first = harness()
+      const shell = await provider.openShell({ cols: 80, rows: 24, handlers: first.handlers })
+      type(shell, 'echo FIRST-SHELL')
+      expect(await first.waitFor('FIRST-SHELL')).toBe(true)
+
+      shell.close()
+      await sleep(500)
+      expect(first.ends).toHaveLength(1)
+
+      // Browsing still works: closing a terminal must never end the connection.
+      expect((await provider.list('/config/fixture')).length).toBeGreaterThan(0)
+
+      const second = harness()
+      const another = await provider.openShell({ cols: 80, rows: 24, handlers: second.handlers })
+      type(another, 'echo SECOND-SHELL')
+      expect(await second.waitFor('SECOND-SHELL')).toBe(true)
+      another.close()
+      await provider.disconnect()
+    })
+
+    it('ends every shell when the connection goes', async () => {
+      const { provider, connected } = connectTo(server)
+      await connected
+      const out = harness()
+      await provider.openShell({ cols: 80, rows: 24, handlers: out.handlers })
+      await provider.disconnect()
+      await sleep(500)
+      expect(out.ends).toHaveLength(1)
+    })
+
+    it('refuses a shell when nothing is connected', async () => {
+      const provider = new Ssh2SftpProvider(FAST)
+      expect(await codeOf(provider.openShell({ cols: 80, rows: 24, handlers: harness().handlers }))).toBe('NOT_CONNECTED')
+    })
+  })
+
 })
 
 describe('Ssh2SftpProvider against a reconfigured OpenSSH', () => {

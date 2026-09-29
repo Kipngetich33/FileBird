@@ -133,6 +133,9 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
           case 'transfer':
             transferRef.current(activeRef.current, pane(activeRef.current)?.selectedEntries() ?? [])
             break
+          case 'toggle-terminal':
+            pane(activeRef.current)?.toggleTerminal()
+            break
           case 'new-folder':
           case 'rename':
           case 'delete': {
@@ -180,6 +183,7 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
               onDropEntries={(source, entries, destination) => transferEntries(source, entries, destination)}
               onTransfer={(entries) => transferEntries('local', entries)}
               canTransfer={remote.connection !== null}
+              terminal={{ side: 'local' }}
               actions={
                 <TransferButton
                   direction="upload"

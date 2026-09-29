@@ -356,6 +356,13 @@ async function launchApp() {
         await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount })
       }
     },
+    /** Types into the terminal that has focus, as a person would, then Enter. */
+    async typeInTerminal(scope, line) {
+      await js(`document.querySelector(${q(`${scope} .xterm-helper-textarea`)}).focus()`)
+      await send('Input.insertText', { text: line })
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    },
     async press(key, code, keyCode, modifiers = 0) {
       await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers })
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers })
@@ -490,6 +497,7 @@ try {
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
         sshConfig: ['import', 'preview'],
         system: ['getVersion'],
+        terminals: ['acknowledge', 'close', 'onData', 'onExit', 'open', 'resize', 'setFocus', 'write'],
         transfers: ['cancel', 'cancelAll', 'clearFinished', 'list', 'onUpdate', 'retry', 'retryFailed', 'start']
       })
   )
@@ -546,7 +554,7 @@ try {
   record(
     'UI local: Back returns and reselects the folder',
     await app.js(pathOf(LOCAL)),
-    await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)} && document.querySelector(${q(`${LOCAL} [aria-selected="true"]`)})?.dataset.path === ${q(join(fixture, 'alpha'))}`)
+    await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)} && document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path === ${q(join(fixture, 'alpha'))}`)
   )
   await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
   await app.press('Enter', 'Enter', 13)
@@ -580,9 +588,9 @@ try {
   await sleep(300)
   record(
     'UI local: Cmd-click selects a folder without opening it',
-    { path: await app.js(pathOf(LOCAL)), selected: await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [aria-selected="true"]`)})].map((row) => row.dataset.path)`) },
+    { path: await app.js(pathOf(LOCAL)), selected: await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})].map((row) => row.dataset.path)`) },
     (await app.js(pathOf(LOCAL))) === fixture &&
-      (await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [aria-selected="true"]`)})].map((row) => row.dataset.path)`)).includes(join(fixture, 'link-to-alpha'))
+      (await app.js(`[...document.querySelectorAll(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})].map((row) => row.dataset.path)`)).includes(join(fixture, 'link-to-alpha'))
   )
   await writeFile(join(fixture, 'added-later.txt'), '')
   await app.press('F5', 'F5', 116)
@@ -1010,7 +1018,7 @@ try {
   record(
     'multi-select: Cmd-click adds rows, and the footer counts them',
     await app.js(localFooter),
-    (await app.waitFor(`${localFooter}.startsWith('3 selected')`)) && (await app.js(`document.querySelectorAll(${q(`${LOCAL} [aria-selected="true"]`)}).length`)) === 3
+    (await app.waitFor(`${localFooter}.startsWith('3 selected')`)) && (await app.js(`document.querySelectorAll(${q(`${LOCAL} [role="row"][aria-selected="true"]`)}).length`)) === 3
   )
   const multiBox = await app.js(box(UPLOAD_BUTTON))
   await app.mouseClick(multiBox.x + multiBox.w / 2, multiBox.y + multiBox.h / 2)
@@ -1160,7 +1168,7 @@ try {
   const NAME_INPUT = 'input[name="item-name"]'
   const TRASH = join(scratch, 'trash')
   const nameProblemText = textOf('[data-testid="name-problem"]')
-  const selectedIn = (scope) => `[...document.querySelectorAll(${q(`${scope} [aria-selected="true"]`)})].map((row) => row.dataset.path)`
+  const selectedIn = (scope) => `[...document.querySelectorAll(${q(`${scope} [role="row"][aria-selected="true"]`)})].map((row) => row.dataset.path)`
   const inputSelection = `(() => { const i = document.querySelector(${q(NAME_INPUT)}); return i ? i.value.slice(i.selectionStart, i.selectionEnd) : null })()`
   const clickBox = async (selector) => {
     const r = await app.js(box(selector))
@@ -1475,12 +1483,119 @@ try {
     independence.remoteLoading && independence.localOpened && independence.localBack && independence.stillLoading && remoteCaughtUp
   )
 
+  // ------------------------------------------------- M11: terminals in both panes ---
+
+  const terminalText = (scope) => `(document.querySelector(${q(`${scope} .xterm-rows`)})?.innerText ?? '')`
+  const tab = (scope, name) => `${scope} [data-testid="tab-${name}"]`
+  const openTerminal = async (scope) => {
+    const r = await app.js(box(tab(scope, 'terminal')))
+    await app.mouseClick(r.x + r.w / 2, r.y + r.h / 2)
+    return app.waitFor(`!!document.querySelector(${q(`${scope} .xterm-rows`)})`, 10000)
+  }
+
+  // The local pane: a real shell on this computer, started in the pane's folder.
+  await app.clickMenu('command:focus-local')
+  const localTerminalShown = await openTerminal(LOCAL)
+  await app.waitFor(`${terminalText(LOCAL)}.trim().length > 0`, 10000)
+  await app.typeInTerminal(LOCAL, 'echo FLY-LOCAL-$((6*7)); pwd')
+  const localRan = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`, 15000)
+  const localInFolder = await app.waitFor(`${terminalText(LOCAL)}.includes(${q(fixture)})`, 5000)
+  record(
+    'terminal: the local pane runs a real shell, starting in the folder it is showing',
+    { localTerminalShown, localRan, localInFolder },
+    localTerminalShown && localRan && localInFolder
+  )
+
+  // Full-screen programs need a real terminal; a plain pipe would say "not a tty".
+  await app.typeInTerminal(LOCAL, 'tty; echo TERM-IS-$TERM; echo SIZE-$(tput cols)')
+  const isRealTty = await app.waitFor(`${terminalText(LOCAL)}.includes('TERM-IS-xterm-256color')`, 10000)
+  record(
+    'terminal: it is a real terminal, not a pipe (tty, $TERM and a width)',
+    await app.js(`${terminalText(LOCAL)}.split(String.fromCharCode(10)).filter((line) => line.includes('/dev/tty') || line.includes('TERM-IS-') || line.includes('SIZE-')).join(' | ')`),
+    isRealTty && (await app.js(`${terminalText(LOCAL)}.includes('/dev/tty')`)) && (await app.js(`${terminalText(LOCAL)}.split('SIZE-')[1]?.trim().charCodeAt(0) >= 49`))
+  )
+
+  // While a terminal has focus, the menu's file commands hand their keys over.
+  const suppressed = JSON.parse(
+    await app.mainEval(`JSON.stringify((() => {
+      const menu = process.mainModule.require('electron').Menu.getApplicationMenu()
+      const ids = ['refresh', 'select-all', 'go-back', 'go-up', 'transfer', 'new-folder', 'rename', 'delete']
+      return { files: ids.map((id) => menu.getMenuItemById('command:' + id)?.enabled), terminal: menu.getMenuItemById('command:toggle-terminal')?.enabled }
+    })())`)
+  )
+  record(
+    'terminal: while it has focus, keys that act on files are disabled, and Files / Terminal is not',
+    suppressed,
+    suppressed.files.every((enabled) => enabled === false) && suppressed.terminal === true
+  )
+
+  // Back to the files, and the menu's keys come back with it.
+  await app.clickMenu('command:toggle-terminal')
+  const backToFiles = await app.waitFor(`document.querySelector(${q(tab(LOCAL, 'files'))})?.getAttribute('aria-selected') === 'true'`)
+  await sleep(300)
+  const restored = JSON.parse(
+    await app.mainEval(`JSON.stringify(['refresh', 'delete'].map((id) => process.mainModule.require('electron').Menu.getApplicationMenu().getMenuItemById('command:' + id)?.enabled))`)
+  )
+  await app.clickMenu('command:toggle-terminal')
+  const keptScrollback = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`, 5000)
+  record(
+    'terminal: Files / Terminal switches back and forth, keeping the session, and restores the file keys',
+    { backToFiles, restored, keptScrollback },
+    backToFiles && restored.every((enabled) => enabled === true) && keptScrollback
+  )
+
+  // The remote pane: a shell on the server, over the connection already open.
+  await app.clickMenu('command:focus-remote')
+  const remoteTerminalShown = await openTerminal(REMOTE)
+  await app.waitFor(`${terminalText(REMOTE)}.trim().length > 0`, 15000)
+  const remoteFolder = await app.js(pathOf(REMOTE))
+  await app.typeInTerminal(REMOTE, 'echo FLY-REMOTE-$(hostname); pwd')
+  const remoteRan = await app.waitFor(`${terminalText(REMOTE)}.includes('FLY-REMOTE-')`, 20000)
+  const remoteInFolder = await app.waitFor(`${terminalText(REMOTE)}.includes(${q(remoteFolder)})`, 10000)
+  record(
+    'terminal: the remote pane runs a shell on the server, in the folder it is showing',
+    { remoteFolder, remoteTerminalShown, remoteRan, remoteInFolder },
+    remoteTerminalShown && remoteRan && remoteInFolder && remoteFolder.length > 0
+  )
+
+  // The same connection carries transfers while a terminal is open.
+  await server.exec('printf beside > /config/fixture/beside-terminal.txt && chown 1000:1000 /config/fixture/beside-terminal.txt')
+  await app.typeInTerminal(REMOTE, 'echo STILL-HERE')
+  await app.clickMenu('command:toggle-terminal')
+  await app.waitFor(`document.querySelector(${q(tab(REMOTE, 'files'))})?.getAttribute('aria-selected') === 'true'`)
+  // The pane may be deeper in the tree from an earlier check; the file is in /config/fixture.
+  for (let up = 0; up < 3 && (await app.js(pathOf(REMOTE))) !== '/config/fixture'; up += 1) {
+    await app.clickMenu('command:go-up')
+    await sleep(400)
+  }
+  await app.clickMenu('command:refresh')
+  const besideListed = await app.waitFor(exists(rowFor('/config/fixture/beside-terminal.txt')), 10000)
+  await selectRow('/config/fixture/beside-terminal.txt')
+  const downloadBox = await app.js(box(`${REMOTE} [data-testid="download-button"]`))
+  await app.mouseClick(downloadBox.x + downloadBox.w / 2, downloadBox.y + downloadBox.h / 2)
+  const downloadedBeside = await app.waitFor(`${jobStatus('beside-terminal.txt')} === 'completed'`, 20000)
+  record(
+    'terminal: a transfer still works on a connection that is also running a terminal',
+    { besideListed, downloadedBeside },
+    besideListed && downloadedBeside && (await readFile(join(fixture, 'beside-terminal.txt'), 'utf8').catch(() => '')) === 'beside'
+  )
+
   await app.js(`document.querySelector(${q(rowFor(join(fixture, 'file2.txt')))}).click()`)
-  const localBeforeDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [aria-selected="true"]`)})?.dataset.path })`)
+  const localBeforeDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path })`)
   await app.click(REMOTE, 'Disconnect')
   await app.waitFor(exists(profileRow('Smoke key')))
-  const localAfterDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [aria-selected="true"]`)})?.dataset.path })`)
+  const localAfterDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path })`)
   record('independence: disconnecting leaves the local path and selection untouched', localAfterDisconnect, localAfterDisconnect === localBeforeDisconnect)
+
+  record(
+    'terminal: disconnecting closes the remote terminal, and the local one carries on',
+    {
+      remoteTabs: await app.js(`document.querySelectorAll(${q(tab(REMOTE, 'terminal'))}).length`),
+      localStillThere: await app.js(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`)
+    },
+    (await app.js(`document.querySelectorAll(${q(tab(REMOTE, 'terminal'))}).length`)) === 0 &&
+      (await app.js(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`))
+  )
 
   // ----------------------------------------------------- password, not remembered ---
 
@@ -1653,6 +1768,12 @@ try {
 if (server) {
   const logText = mainLogs.join('')
   const leaked = [server.password, TEST_PASSPHRASE, 'definitely-wrong', 'not the passphrase'].filter((s) => logText.includes(s))
+  record(
+    'nothing typed or printed in a terminal appears in the main-process log',
+    { terminalMarkers: ['FLY-LOCAL-42', 'FLY-REMOTE-', 'STILL-HERE'].filter((marker) => logText.includes(marker)) },
+    logText.includes('"message":"Terminal opened"') &&
+      !['FLY-LOCAL-42', 'FLY-REMOTE-', 'STILL-HERE', 'TERM-IS-xterm'].some((marker) => logText.includes(marker))
+  )
   record(
     'no password or passphrase appears in the main-process log',
     { logCoversConnections: logText.includes('"message":"Connected"'), leaked: leaked.length },

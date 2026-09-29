@@ -34,7 +34,13 @@ export const IPC = {
   TRANSFERS_LIST: 'transfers:list',
   FILES_CREATE_FOLDER: 'files:create-folder',
   FILES_RENAME: 'files:rename',
-  FILES_DELETE: 'files:delete'
+  FILES_DELETE: 'files:delete',
+  TERMINAL_OPEN: 'terminal:open',
+  TERMINAL_WRITE: 'terminal:write',
+  TERMINAL_RESIZE: 'terminal:resize',
+  TERMINAL_ACK: 'terminal:ack',
+  TERMINAL_CLOSE: 'terminal:close',
+  TERMINAL_SET_FOCUS: 'terminal:set-focus'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -46,5 +52,7 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 export const IPC_EVENTS = {
   SFTP_CONNECTION_CLOSED: 'sftp:connection-closed',
   MENU_COMMAND: 'app:menu-command',
-  TRANSFER_UPDATE: 'transfers:update'
+  TRANSFER_UPDATE: 'transfers:update',
+  TERMINAL_DATA: 'terminal:data',
+  TERMINAL_EXIT: 'terminal:exit'
 } as const

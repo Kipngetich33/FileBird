@@ -18,7 +18,9 @@ import { appService } from '@renderer/services/app.service'
 import { fileContextMenu } from '@renderer/utils/context-menu'
 import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type DraggedEntry } from '@renderer/utils/drag'
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
+import { TerminalView } from '@renderer/components/Terminal/TerminalView'
 import { NameDialog } from './NameDialog'
+import { PaneTabs, type PaneTab } from './PaneTabs'
 import { PaneHeader } from './PaneHeader'
 import { PaneFooter } from './PaneFooter'
 import { FileTable } from './FileTable'
@@ -54,6 +56,8 @@ interface FilePaneProps {
   onTransfer?: (entries: FileEntry[]) => void
   /** False while a transfer can't start, e.g. the local pane with no server connected. */
   canTransfer?: boolean
+  /** Absent for a pane that can't run a shell, such as the remote pane before it connects. */
+  terminal?: { side: 'local' | 'remote'; connectionId?: string }
 }
 
 /**
@@ -83,7 +87,8 @@ export function FilePane({
   side,
   onDropEntries,
   onTransfer,
-  canTransfer = true
+  canTransfer = true,
+  terminal
 }: FilePaneProps): JSX.Element {
   const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, loadingPath, error, canGoBack } = directory
   const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
@@ -92,6 +97,15 @@ export function FilePane({
 
   useEffect(() => paneRef.current?.focus(), [])
 
+  const [tab, setTab] = useState<PaneTab>('files')
+  /**
+   * The terminal is created the first time it is asked for and then stays, so
+   * switching back to the files keeps the session and its scrollback. Its
+   * starting folder is frozen here: the shell has its own from then on, and
+   * following the file list would interrupt whatever is running.
+   */
+  const [terminalCwd, setTerminalCwd] = useState<string | null>(null)
+  const [terminalStarted, setTerminalStarted] = useState(false)
   const [operation, setOperation] = useState<Operation | null>(null)
   const [operationBusy, setOperationBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -158,6 +172,27 @@ export function FilePane({
     const entries = decodeDrag(event.dataTransfer.getData(dragType(source)))
     if (entries !== null) onDropEntries(source, entries, destination)
   }
+
+  const showTerminal = useCallback(
+    (next: PaneTab) => {
+      if (terminal === undefined) return
+      if (next === 'terminal' && !terminalStarted) {
+        setTerminalCwd(listing?.path ?? null)
+        setTerminalStarted(true)
+      }
+      setTab(next)
+      if (next === 'files') paneRef.current?.focus()
+    },
+    [terminal, terminalStarted, listing]
+  )
+
+  // A terminal on a connection that has gone away is closed with it.
+  useEffect(() => {
+    if (terminal === undefined && terminalStarted) {
+      setTerminalStarted(false)
+      setTab('files')
+    }
+  }, [terminal, terminalStarted])
 
   const startNewFolder = useCallback(() => {
     if (operations === undefined || listing === null) return
@@ -233,9 +268,10 @@ export function FilePane({
       },
       newFolder: startNewFolder,
       rename: startRename,
-      deleteSelection: startDelete
+      deleteSelection: startDelete,
+      toggleTerminal: () => showTerminal(tab === 'terminal' ? 'files' : 'terminal')
     }),
-    [refresh, goBack, goUp, listing, selectedEntries, selectAll, startNewFolder, startRename, startDelete]
+    [refresh, goBack, goUp, listing, selectedEntries, selectAll, startNewFolder, startRename, startDelete, showTerminal, tab]
   )
 
   // Keep the selected row in view as the keyboard moves it.
@@ -303,6 +339,9 @@ export function FilePane({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    // Keys typed in the terminal belong to the shell, including Tab and Backspace.
+    if (tab === 'terminal') return
+
     // Tab from the listing itself switches panes; from toolbar buttons it stays
     // ordinary tabbing, so every control remains reachable by keyboard.
     if (event.key === 'Tab') {
@@ -401,6 +440,8 @@ export function FilePane({
           dropDestination !== null ? 'border-sky-400 ring-2 ring-sky-400/40' : active ? 'border-sky-500/35' : 'border-white/[0.07]'
         }`}
       >
+        {terminal !== undefined && <PaneTabs active={tab} paneActive={active} onChange={showTerminal} />}
+
         <PaneHeader
           title={title}
           subtitle={subtitle}
@@ -462,6 +503,7 @@ export function FilePane({
         <div
           ref={scrollRef}
           data-testid="file-list"
+          hidden={tab === 'terminal'}
           className="min-h-0 flex-1 overflow-y-auto"
           onContextMenu={(event) => {
             // A row's own menu has already been handled.
@@ -488,6 +530,17 @@ export function FilePane({
             <p className="px-3 py-6 text-center text-[12px] text-zinc-600">This folder is empty.</p>
           )}
         </div>
+
+        {terminalStarted && terminal !== undefined && (
+          <div hidden={tab !== 'terminal'} className="flex min-h-0 flex-1 flex-col">
+            <TerminalView
+              side={terminal.side}
+              {...(terminal.connectionId === undefined ? {} : { connectionId: terminal.connectionId })}
+              cwd={terminalCwd}
+              visible={tab === 'terminal'}
+            />
+          </div>
+        )}
 
         {dropDestination !== null && (
           <div

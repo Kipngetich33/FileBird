@@ -16,6 +16,8 @@ export interface PaneHandle {
   selectAll: () => void
   /** Refreshes only if the pane is showing this folder, e.g. after a transfer into it. */
   refreshIfShowing: (path: string) => void
+  /** Switches the pane between its files and its terminal (Milestone 11). */
+  toggleTerminal: () => void
   /** File operations (Milestone 8); each opens its dialog, or does nothing if unavailable. */
   newFolder: () => void
   rename: () => void

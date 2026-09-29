@@ -32,6 +32,34 @@ export interface SftpTimeouts {
   keepaliveCountMax: number
 }
 
+/**
+ * One interactive shell on a connection (Milestone 11). The connection is
+ * shared with file transfers, so closing a shell only ever ends its own channel.
+ */
+export interface ShellSession {
+  /** Keystrokes, as the bytes the terminal produced. */
+  write(data: Uint8Array): void
+  /** The terminal's new size in characters. */
+  resize(cols: number, rows: number): void
+  /** Stops and restarts the server's output while the terminal catches up. */
+  setFlowing(flowing: boolean): void
+  /** Ends this shell. The connection, and any transfer on it, carries on. */
+  close(): void
+}
+
+export interface ShellHandlers {
+  /** Raw output. Never decoded here: a character can straddle two chunks. */
+  onData: (chunk: Buffer) => void
+  /** The shell ended, whether by exiting, by close(), or with the connection. */
+  onClose: (end: { code: number | null; signal: string | null }) => void
+}
+
+export interface ShellOptions {
+  cols: number
+  rows: number
+  handlers: ShellHandlers
+}
+
 export interface SftpProvider {
   /** Resolves once authenticated with an SFTP session open. Rejects with an AppError where the cause is known. */
   connect(options: SftpConnectOptions): Promise<void>
@@ -60,6 +88,8 @@ export interface SftpProvider {
   renameNoReplace(from: string, to: string): Promise<void>
   /** Removes an empty folder. */
   removeDirectory(path: string): Promise<void>
+  /** Opens an interactive shell with a pseudo-terminal, alongside the file session. */
+  openShell(options: ShellOptions): Promise<ShellSession>
 }
 
 export interface LinkStat {

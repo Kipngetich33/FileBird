@@ -29,6 +29,8 @@ import {
   type SftpConnectOptions,
   type SftpProvider,
   type SftpTimeouts,
+  type ShellOptions,
+  type ShellSession,
   type TransferOptions,
   type UploadOptions
 } from './sftp-provider'
@@ -56,6 +58,9 @@ const SFTP_FAILURE = 4
 
 /** How long to wait, after a transfer error, for the connection to report that it closed. */
 const CLOSE_SETTLE_MS = 1_000
+
+/** What $TERM says inside a shell: xterm.js speaks this, and servers have had it for years. */
+const TERM_NAME = 'xterm-256color'
 
 type SshError = Error & ClientErrorExtensions
 
@@ -478,6 +483,68 @@ export class Ssh2SftpProvider implements SftpProvider {
         )
     }
     return error
+  }
+
+  /**
+   * An interactive shell on this connection (Milestone 11 plan D2).
+   *
+   * The pseudo-terminal is sized in characters; the pixel size is left at zero,
+   * because ssh2 ignores it when rows and columns are given.
+   */
+  openShell({ cols, rows, handlers }: ShellOptions): Promise<ShellSession> {
+    const client = this.client
+    if (client === null || this.sftp === null) return Promise.reject(notConnected())
+
+    return new Promise<ShellSession>((resolve, reject) => {
+      client.shell({ term: TERM_NAME, cols, rows, width: 0, height: 0 }, {}, (error, stream) => {
+        if (error !== undefined) {
+          reject(this.toRequestError(error))
+          return
+        }
+
+        let ended = false
+        const end = (code: number | null, signal: string | null): void => {
+          if (ended) return
+          ended = true
+          handlers.onClose({ code, signal })
+        }
+
+        stream.on('data', (chunk: Buffer) => handlers.onData(chunk))
+        // A pty merges the server's stderr into its output, but an unread stream
+        // would still fill up, so it is drained into the same place.
+        stream.stderr.on('data', (chunk: Buffer) => handlers.onData(chunk))
+        // 'exit' is optional in the SSH protocol, so 'close' is what settles it.
+        stream.on('exit', (code: number | null, signal?: string) => end(typeof code === 'number' ? code : null, signal ?? null))
+        stream.on('close', () => end(null, null))
+        // A channel error must never reach the process as an unhandled event.
+        stream.on('error', (channelError: Error) => {
+          log.warn('Shell channel error', { message: channelError.message })
+          end(null, null)
+        })
+
+        resolve({
+          write: (data) => {
+            if (!ended) stream.write(Buffer.from(data))
+          },
+          // setWindow takes rows before columns, the opposite way round to the terminal.
+          resize: (nextCols, nextRows) => {
+            if (!ended) stream.setWindow(nextRows, nextCols, 0, 0)
+          },
+          setFlowing: (flowing) => {
+            if (ended) return
+            // Pausing stops ssh2 extending the channel's window, so the server
+            // itself stops sending rather than the output piling up here.
+            if (flowing) stream.resume()
+            else stream.pause()
+          },
+          close: () => {
+            if (ended) return
+            // ssh2's destroy() sends EOF and closes this channel only.
+            stream.destroy()
+          }
+        })
+      })
+    })
   }
 
   private requireSession(): SFTPWrapper {

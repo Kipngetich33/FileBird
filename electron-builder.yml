@@ -16,10 +16,16 @@ files:
   # to pure JS without them (measured in M6).
   - '!node_modules/ssh2/lib/protocol/crypto/build/**'
   - '!node_modules/cpu-features/build/**'
+  # node-pty carries a prebuilt terminal binary for every platform; each build
+  # keeps only its own (see the per-platform lists below).
+  - '!node_modules/node-pty/build/**'
+  - '!node_modules/node-pty/**/*.pdb'
 
-# Native modules can't load from inside the asar archive.
+# Native modules can't load from inside the asar archive. node-pty also runs a
+# small helper program next to its binary, which has no extension of its own.
 asarUnpack:
   - '**/*.node'
+  - '**/node_modules/node-pty/prebuilds/**'
 
 # No rebuild against Electron's headers (Milestone 10 plan D1): ssh2's optional
 # native crypto falls back to pure JS under Electron (measured in M6), and
@@ -45,6 +51,7 @@ mac:
   # Each platform carries only its own keychain binaries (see prepare-native.mjs).
   files:
     - '!node_modules/@napi-rs/keyring-{win32,linux,freebsd}-*/**'
+    - '!node_modules/node-pty/prebuilds/{win32,linux}-*/**'
   target:
     - target: dmg
       arch: [arm64, x64]
@@ -56,7 +63,7 @@ mac:
   gatekeeperAssess: false
   # A universal build merges the x64 and arm64 apps. Each keychain binary is
   # single-arch and identical in both, so it is kept as-is rather than merged.
-  x64ArchFiles: '**/node_modules/@napi-rs/keyring-darwin-*/*.node'
+  x64ArchFiles: '**/node_modules/{@napi-rs/keyring-darwin-*/*.node,node-pty/prebuilds/darwin-*/*}'
 
 dmg:
   artifactName: ${productName}-${version}-mac-${arch}.dmg
@@ -80,6 +87,7 @@ dmg:
 win:
   files:
     - '!node_modules/@napi-rs/keyring-{darwin,linux,freebsd}-*/**'
+    - '!node_modules/node-pty/prebuilds/{darwin,linux}-*/**'
   target:
     - target: nsis
       arch: [x64]
@@ -92,6 +100,7 @@ nsis:
 linux:
   files:
     - '!node_modules/@napi-rs/keyring-{darwin,win32,freebsd}-*/**'
+    - '!node_modules/node-pty/prebuilds/{darwin,win32}-*/**'
   target:
     - target: AppImage
       arch: [x64]

@@ -14,7 +14,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -62,6 +62,25 @@ async function keyringBinaries() {
   )
 }
 
+/**
+ * The terminal's prebuilt binaries, which must sit outside the asar: node-pty
+ * loads pty.node and runs spawn-helper, and neither can be read from inside it.
+ */
+async function terminalBinaries() {
+  const root = join(unpacked, 'node-pty', 'prebuilds')
+  if (!existsSync(root)) return []
+  const platforms = await readdir(root)
+  const found = []
+  for (const name of platforms) {
+    for (const file of await readdir(join(root, name))) {
+      const path = join(root, name, file)
+      const info = await stat(path)
+      found.push({ platform: name, file, executable: (info.mode & 0o111) !== 0 })
+    }
+  }
+  return found
+}
+
 /** The PE certificate table's size: 0 means the executable carries no signature. */
 async function peCertificateSize(path) {
   const bytes = await readFile(path)
@@ -101,6 +120,12 @@ try {
       '',
       !existsSync(join(unpacked, 'ssh2', 'lib', 'protocol', 'crypto', 'build')) && !existsSync(join(unpacked, 'cpu-features', 'build'))
     )
+    const terminalFiles = await terminalBinaries()
+    record(
+      "the terminal's binaries are unpacked for this platform only",
+      terminalFiles,
+      terminalFiles.length > 0 && terminalFiles.every((file) => file.platform.startsWith(platform === 'win32' ? 'win32-' : 'linux-'))
+    )
     if (platform === 'win32') {
       const size = await peCertificateSize(binary)
       record('not code-signed (no certificate is configured)', `certificate table: ${size} bytes`, size === 0)
@@ -138,6 +163,22 @@ try {
       "ssh2's Node-only native crypto is not shipped",
       '',
       !existsSync(join(unpacked, 'ssh2', 'lib', 'protocol', 'crypto', 'build')) && !existsSync(join(unpacked, 'cpu-features', 'build'))
+    )
+
+    const terminalFiles = await terminalBinaries()
+    const helper = terminalFiles.find((file) => file.file === 'spawn-helper')
+    const signedHelper =
+      helper === undefined
+        ? 'missing'
+        : await run('codesign', ['--verify', join(unpacked, 'node-pty', 'prebuilds', helper.platform, 'spawn-helper')]).then(() => 'signed', () => 'unsigned')
+    record(
+      "the terminal's binaries are unpacked for this platform only, runnable and signed",
+      { files: terminalFiles, signedHelper },
+      terminalFiles.length > 0 &&
+        terminalFiles.every((file) => file.platform.startsWith('darwin-')) &&
+        terminalFiles.some((file) => file.file === 'pty.node') &&
+        helper?.executable === true &&
+        signedHelper === 'signed'
     )
 
     if (!archs.split(' ').includes(hostArch)) {
@@ -208,8 +249,29 @@ try {
         'the preload bridge exposes exactly the approved areas',
         await js('JSON.stringify(Object.keys(window.api).sort())'),
         (await js('JSON.stringify(Object.keys(window.api).sort())')) ===
-          JSON.stringify(['app', 'connections', 'files', 'keys', 'local', 'sftp', 'sshConfig', 'system', 'transfers'])
+          JSON.stringify(['app', 'connections', 'files', 'keys', 'local', 'sftp', 'sshConfig', 'system', 'terminals', 'transfers'])
       )
+      // A terminal in the packaged app: this is what catches a helper left inside
+      // the asar, or one the signature or the permission bits broke.
+      const send = (method, params = {}) =>
+        new Promise((resolve, reject) => {
+          const id = ++nextId
+          pending.set(id, (message) => (message.error ? reject(new Error(JSON.stringify(message.error))) : resolve(message.result)))
+          ws.send(JSON.stringify({ id, method, params }))
+        })
+      const LOCAL_PANE = '[aria-label="Local files"]'
+      await js(`document.querySelector('${LOCAL_PANE} [data-testid="tab-terminal"]').click()`)
+      const terminalShown = await waitFor(`document.querySelector('${LOCAL_PANE} .xterm-rows') !== null`)
+      const terminalText = `(document.querySelector('${LOCAL_PANE} .xterm-rows')?.innerText ?? '')`
+      const promptShown = await waitFor(`${terminalText}.trim().length > 0`, 15000)
+      await js(`document.querySelector('${LOCAL_PANE} .xterm-helper-textarea').focus()`)
+      await send('Input.insertText', { text: 'echo PACKAGED-TERMINAL-$((6*7))' })
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+      const terminalRan = await waitFor(`${terminalText}.includes('PACKAGED-TERMINAL-42')`, 20000)
+      record('runs a local terminal, with its pty binary and helper from outside the asar', { terminalShown, promptShown, terminalRan }, terminalShown && promptShown && terminalRan)
+      await js(`document.querySelector('${LOCAL_PANE} [data-testid="tab-files"]').click()`)
+
       const violations = await js(`new Promise((resolve) => {
         const seen = []
         document.addEventListener('securitypolicyviolation', (event) => seen.push(event.violatedDirective))

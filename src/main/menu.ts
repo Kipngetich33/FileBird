@@ -8,6 +8,22 @@ export interface ApplicationMenuOptions {
   send: (command: MenuCommand) => void
 }
 
+/**
+ * Commands that act on files. While a terminal has focus these are disabled, so
+ * their keys reach the shell instead (Milestone 11 plan D6): macOS always
+ * registers a menu accelerator, so Cmd+R and friends would never arrive.
+ */
+export const TERMINAL_SUPPRESSED_COMMANDS: MenuCommand[] = [
+  'refresh',
+  'select-all',
+  'go-back',
+  'go-up',
+  'transfer',
+  'new-folder',
+  'rename',
+  'delete'
+]
+
 /** Stable id for a command item, so tests and code can find it with getMenuItemById. */
 export const menuItemId = (command: MenuCommand): string => `command:${command}`
 
@@ -71,6 +87,10 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
         { type: 'separator' },
         command('focus-local', 'Focus Local Pane', 'CmdOrCtrl+1'),
         command('focus-remote', 'Focus Remote Pane', 'CmdOrCtrl+2'),
+        { type: 'separator' },
+        // Deliberately not suppressed while a terminal has focus: this is how
+        // the keyboard gets back out of it.
+        command('toggle-terminal', 'Files / Terminal', 'CmdOrCtrl+`'),
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

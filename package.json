@@ -1,7 +1,7 @@
 {
   "name": "fly",
   "version": "0.1.0",
-  "description": "FileFly \u2014 a cross-platform desktop SFTP client",
+  "description": "FileFly — a cross-platform desktop SFTP client",
   "desktopName": "fly.desktop",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
@@ -48,6 +48,9 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "^2.0.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.2.0-beta.15",
     "ssh2": "^1.17.0"
   }
 }

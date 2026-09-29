@@ -81,6 +81,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
       newFolder: () => connectedPaneRef.current?.newFolder(),
       rename: () => connectedPaneRef.current?.rename(),
       deleteSelection: () => connectedPaneRef.current?.deleteSelection(),
+      toggleTerminal: () => connectedPaneRef.current?.toggleTerminal(),
       refreshIfShowing: (path) => connectedPaneRef.current?.refreshIfShowing(path)
     }),
     [connected, reload]
@@ -345,6 +346,7 @@ function ConnectedPane({
       side="remote"
       onDropEntries={onDropEntries}
       onTransfer={onDownload}
+      terminal={{ side: 'remote', connectionId: connection.id }}
       actions={
         <>
           <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />
