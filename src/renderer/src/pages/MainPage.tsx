@@ -90,11 +90,32 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
   const activeRef = useRef<PaneId>(active)
   activeRef.current = active
 
-  /** Sends the entries to the folder the other pane is showing, or to `into` (a drop on a folder). */
+  // Asked for once: where a download goes when it wasn't dragged to a folder.
+  const [downloadFolder, setDownloadFolder] = useState<string | null>(null)
+  useEffect(() => {
+    let current = true
+    void localFilesService
+      .getDownloadFolder()
+      .then((folder) => {
+        if (current) setDownloadFolder(folder)
+      })
+      .catch(() => undefined)
+    return () => {
+      current = false
+    }
+  }, [])
+
+  /**
+   * Sends the entries to `into` (a drop on a folder), else to where that kind of
+   * transfer belongs: an upload to the folder the remote pane is showing, and a
+   * download to the Downloads folder, the way a browser would. Dragging is how
+   * you send a download somewhere else.
+   */
   function transferEntries(from: PaneId, entries: Array<FileEntry | DraggedEntry>, into?: string): void {
     const connection = remote.connection
     const direction = from === 'local' ? 'upload' : 'download'
-    const destination = into ?? (from === 'local' ? remoteRef : localRef).current?.currentPath() ?? null
+    const destination =
+      into ?? (from === 'local' ? (remoteRef.current?.currentPath() ?? null) : (downloadFolder ?? localRef.current?.currentPath() ?? null))
     const transferable = entries.filter((entry) => entry.kind !== 'other')
     if (connection === null) return transfers.refuse('Connect to a server first.')
     if (entries.length === 0) return transfers.refuse(`Select files or folders to ${direction}.`)
@@ -202,6 +223,7 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
               onActivate={() => setActive('remote')}
               onSwitchPane={() => localRef.current?.focus()}
               onDownload={(entries) => transferEntries('remote', entries)}
+              downloadFolder={downloadFolder}
               activeTransfers={remote.connection === null ? 0 : transfers.activeCountFor(remote.connection.id)}
               onDropEntries={(source, entries, destination) => transferEntries(source, entries, destination)}
             />

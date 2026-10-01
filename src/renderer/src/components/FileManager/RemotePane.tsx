@@ -37,15 +37,17 @@ interface RemotePaneProps {
   onActivate: () => void
   onSwitchPane: () => void
   ref?: Ref<PaneHandle>
-  /** Downloads the selection into the local pane's folder. */
+  /** Downloads the selection to the Downloads folder. */
   onDownload: (entries: FileEntry[]) => void
+  /** Where a download goes when it wasn't dragged to a folder. */
+  downloadFolder: string | null
   /** Queued or running transfers on the current connection. */
   activeTransfers: number
   onDropEntries: (source: DragSide, entries: DraggedEntry[], destination: string) => void
 }
 
 /** The right-hand pane: saved connections until connected, then the remote file browser. */
-export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, activeTransfers, onDropEntries }: RemotePaneProps): JSX.Element {
+export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDownload, downloadFolder, activeTransfers, onDropEntries }: RemotePaneProps): JSX.Element {
   const saved = useConnectionProfiles()
   const connectedPaneRef = useRef<PaneHandle>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -140,6 +142,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
           notice={remote.notice}
           onDismissNotice={remote.dismissNotice}
           onDownload={onDownload}
+          downloadFolder={downloadFolder}
           onDropEntries={onDropEntries}
         />
       ) : (
@@ -296,6 +299,7 @@ interface ConnectedPaneProps {
   notice: string | null
   onDismissNotice: () => void
   onDownload: (entries: FileEntry[]) => void
+  downloadFolder: string | null
   onDropEntries: (source: DragSide, entries: DraggedEntry[], destination: string) => void
 }
 
@@ -309,6 +313,7 @@ function ConnectedPane({
   notice,
   onDismissNotice,
   onDownload,
+  downloadFolder,
   onDropEntries
 }: ConnectedPaneProps): JSX.Element {
   const source = useMemo<DirectorySource>(
@@ -349,7 +354,12 @@ function ConnectedPane({
       terminal={{ side: 'remote', connectionId: connection.id }}
       actions={
         <>
-          <TransferButton direction="download" entries={directory.selectedEntries} onClick={() => onDownload(directory.selectedEntries)} />
+          <TransferButton
+            direction="download"
+            entries={directory.selectedEntries}
+            destination={downloadFolder}
+            onClick={() => onDownload(directory.selectedEntries)}
+          />
           <button
             type="button"
             onClick={onDisconnect}

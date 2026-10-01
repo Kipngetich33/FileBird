@@ -91,7 +91,7 @@ async function launchApp() {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     // FLY_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
-    env: { ...inherited, FLY_DEV_HOME: fixture, FLY_DEV_TRASH_DIR: join(scratch, 'trash') }
+    env: { ...inherited, FLY_DEV_HOME: fixture, FLY_DEV_TRASH_DIR: join(scratch, 'trash'), FLY_DEV_DOWNLOADS: join(scratch, 'downloads') }
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
   const launchedAt = Date.now()
@@ -438,6 +438,8 @@ try {
 
   fixture = await mkdtemp(join(tmpdir(), 'fly-smoke-'))
   scratch = await mkdtemp(join(tmpdir(), 'fly-smoke-scratch-'))
+  // Where a download goes when it wasn't dragged somewhere (FLY_DEV_DOWNLOADS).
+  await mkdir(join(scratch, 'downloads'), { recursive: true })
   userData = await mkdtemp(join(tmpdir(), 'fly-smoke-userdata-'))
   await mkdir(join(fixture, 'alpha'))
   await writeFile(join(fixture, 'file2.txt'), 'hello')
@@ -493,7 +495,7 @@ try {
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
         files: ['createFolder', 'delete', 'rename'],
         keys: ['inspect', 'pick'],
-        local: ['getStartDirectory', 'listDirectory'],
+        local: ['getDownloadFolder', 'getStartDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
         sshConfig: ['import', 'preview'],
         system: ['getVersion'],
@@ -961,12 +963,25 @@ try {
   await app.clickMenu('command:transfer')
   const downloaded = await app.waitFor(`${jobStatus('from-server.bin')} === 'completed'`, 30000)
   const serverSha = (await server.exec('sha256sum /config/fixture/from-server.bin')).split(' ')[0]
-  const localSha = sha256(await readFile(join(fixture, 'from-server.bin')).catch(() => Buffer.alloc(0)))
-  const downloadListed = await app.waitFor(exists(rowFor(join(fixture, 'from-server.bin'))), 10000)
+  const downloads = join(scratch, 'downloads')
+  const localSha = sha256(await readFile(join(downloads, 'from-server.bin')).catch(() => Buffer.alloc(0)))
+  // It goes to the downloads folder, not to the folder the local pane happens to show.
+  const inPaneFolder = await stat(join(fixture, 'from-server.bin')).then(() => true, () => false)
   record(
-    'UI transfer: Transfer to Other Pane downloads from the active pane, intact, and the local pane shows it',
-    { downloaded, sameContent: serverSha === localSha, downloadListed, leftovers: (await readdir(fixture)).filter((name) => name.includes('fly-part')) },
-    downloaded && serverSha === localSha && downloadListed && (await readdir(fixture)).every((name) => !name.includes('fly-part'))
+    'UI transfer: a download nobody dragged goes to the downloads folder, intact, and not to the folder the pane is showing',
+    {
+      downloaded,
+      sameContent: serverSha === localSha,
+      inDownloads: (await readdir(downloads)).includes('from-server.bin'),
+      inPaneFolder,
+      leftovers: (await readdir(downloads)).filter((name) => name.includes('fly-part'))
+    },
+    downloaded && serverSha === localSha && !inPaneFolder && (await readdir(downloads)).every((name) => !name.includes('fly-part'))
+  )
+  await app.evaluate(
+    'UI transfer: the Download button says where it will put them',
+    `document.querySelector(${q(`${REMOTE} [data-testid="download-button"]`)})?.title ?? ''`,
+    (v) => v.includes(join(scratch, 'downloads'))
   )
 
   // One conflict: asked first, then Replace, then Keep both.
@@ -1054,6 +1069,10 @@ try {
   await app.clickMenu('command:select-all')
   const allCount = await app.js(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length`)
   const selectAllWorks = await app.waitFor(`${localFooter}.startsWith(${q(`${allCount} selected`)})`)
+  // A file to end the range on, now that a download no longer lands in this folder.
+  await writeFile(join(fixture, 'from-server.bin'), 'a local copy to select')
+  await app.clickMenu('command:refresh')
+  await app.waitFor(exists(rowFor(join(fixture, 'from-server.bin'))), 10000)
   // In display order: data.bin, file2.txt, file10.txt, fresh.txt, from-server.bin.
   await selectRow(join(fixture, 'data.bin'))
   await selectRow(join(fixture, 'from-server.bin'), SHIFT)
@@ -1577,7 +1596,7 @@ try {
   record(
     'terminal: a transfer still works on a connection that is also running a terminal',
     { besideListed, downloadedBeside },
-    besideListed && downloadedBeside && (await readFile(join(fixture, 'beside-terminal.txt'), 'utf8').catch(() => '')) === 'beside'
+    besideListed && downloadedBeside && (await readFile(join(scratch, 'downloads', 'beside-terminal.txt'), 'utf8').catch(() => '')) === 'beside'
   )
 
   await app.js(`document.querySelector(${q(rowFor(join(fixture, 'file2.txt')))}).click()`)

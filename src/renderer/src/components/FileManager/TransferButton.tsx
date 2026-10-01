@@ -7,11 +7,13 @@ interface TransferButtonProps {
   entries: FileEntry[]
   /** Why the button is unavailable, when it isn't about the selection. */
   unavailableReason?: string
+  /** Where these would land, so a download says where it goes before it goes there. */
+  destination?: string | null
   onClick: () => void
 }
 
 /** Upload (local pane) or Download (remote pane) for the selection. Transfers queue, so it is never busy. */
-export function TransferButton({ direction, entries, unavailableReason, onClick }: TransferButtonProps): JSX.Element {
+export function TransferButton({ direction, entries, unavailableReason, destination, onClick }: TransferButtonProps): JSX.Element {
   const label = direction === 'upload' ? 'Upload' : 'Download'
   const transferable = entries.filter((entry) => entry.kind !== 'other')
   const reason =
@@ -28,7 +30,7 @@ export function TransferButton({ direction, entries, unavailableReason, onClick 
       type="button"
       disabled={reason !== null}
       onClick={onClick}
-      title={reason ?? `${label} ${what} (⌘T)`}
+      title={reason ?? `${label} ${what}${destination ? ` to ${destination}` : ''} (⌘T)`}
       aria-label={reason === null ? `${label} ${what}` : label}
       data-testid={`${direction}-button`}
       className="inline-flex shrink-0 items-center gap-1 rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:border-sky-500/40 hover:text-sky-200 disabled:pointer-events-none disabled:opacity-35"

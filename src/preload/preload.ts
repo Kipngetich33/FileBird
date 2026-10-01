@@ -44,6 +44,8 @@ const api = {
   local: {
     /** The folder the local pane opens in. */
     getStartDirectory: (): Promise<string> => ipcRenderer.invoke(IPC.LOCAL_GET_START_DIRECTORY),
+    /** Where a download goes when the user hasn't dragged it to a folder. */
+    getDownloadFolder: (): Promise<string> => ipcRenderer.invoke(IPC.LOCAL_GET_DOWNLOAD_FOLDER),
     listDirectory: (path: string): Promise<DirectoryListing> =>
       ipcRenderer.invoke(IPC.LOCAL_LIST_DIRECTORY, path)
   },

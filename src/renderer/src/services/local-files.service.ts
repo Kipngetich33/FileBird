@@ -12,6 +12,15 @@ export const localFilesService = {
     }
   },
 
+  /** Where a download goes when it wasn't dragged to a folder. */
+  async getDownloadFolder(): Promise<string> {
+    try {
+      return await window.api.local.getDownloadFolder()
+    } catch (error) {
+      throw toAppError(error)
+    }
+  },
+
   async listDirectory(path: string): Promise<DirectoryListing> {
     try {
       return await window.api.local.listDirectory(path)
@@ -19,4 +28,4 @@ export const localFilesService = {
       throw toAppError(error)
     }
   }
-} satisfies DirectorySource
+} satisfies DirectorySource & { getDownloadFolder: () => Promise<string> }

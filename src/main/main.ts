@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { APP_NAME } from '../shared/constants/app'
 import { IPC_EVENTS } from '../shared/constants/channels'
-import { splashDuration, startDirectory, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
+import { downloadDirectory, splashDuration, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
 import { registerContextMenuIpc } from './ipc/context-menu.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
@@ -60,15 +60,27 @@ let askingToQuit = false
  */
 const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FLY_DEV_HOME'] : homedir()
 
+function systemDownloads(): string | null {
+  // Unpackaged runs must never write into the real Downloads folder, so tests
+  // name their own (FLY_DEV_DOWNLOADS) and otherwise keep to their fixture home.
+  if (!app.isPackaged && process.env['FLY_DEV_HOME']) return process.env['FLY_DEV_DOWNLOADS'] ?? null
+  try {
+    return app.getPath('downloads')
+  } catch {
+    // Some systems have no such folder; the home folder is then the place to put it.
+    return null
+  }
+}
+
 /**
- * Where the local pane opens: the Downloads folder, so downloading a file puts
- * it where everything else on this computer puts what it fetches. The home
- * folder stays what ~/.ssh/config is read from and what deletes are guarded
- * against. A fixture folder (FLY_DEV_HOME, unpackaged) wins over both.
+ * Where a download goes when the user hasn't chosen a folder by dragging it
+ * somewhere: the Downloads folder, as a browser would. The local pane still
+ * opens in the home folder, which is also what ~/.ssh/config is read from and
+ * what deletes are guarded against.
  */
-const paneStart = startDirectory({
+const downloadFolder = downloadDirectory({
   home: appHome,
-  downloads: !app.isPackaged && process.env['FLY_DEV_HOME'] ? null : downloadsFolder(),
+  downloads: systemDownloads(),
   isDirectory: (path) => {
     try {
       return statSync(path).isDirectory()
@@ -77,15 +89,6 @@ const paneStart = startDirectory({
     }
   }
 })
-
-function downloadsFolder(): string | null {
-  try {
-    return app.getPath('downloads')
-  } catch {
-    // Some systems have no such folder; the home folder is then the sensible start.
-    return null
-  }
-}
 
 /**
  * Local deletes go to the system Trash. Unpackaged builds accept FLY_DEV_TRASH_DIR
@@ -181,7 +184,7 @@ void app.whenReady().then(() => {
   )
   registerSystemIpc()
   registerContextMenuIpc()
-  registerLocalFilesIpc(paneStart)
+  registerLocalFilesIpc(appHome, downloadFolder)
 
   const userData = app.getPath('userData')
 

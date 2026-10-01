@@ -86,14 +86,14 @@ verification and a commit.
    — Homebrew has no Intel bottle for it. Test image is pinned:
    `linuxserver/openssh-server:10.3_p1-r1-ls236`. Tests also need the OpenSSH
    client tools (`ssh`, `ssh-keygen`, `ssh-keyscan`), present on macOS.
-6. **The local pane opens in the Downloads folder** (`startDirectory`), because a
-   download goes to the folder that pane is showing; the home folder stays what
-   `~/.ssh/config` is read from and what deletes are guarded against.
-   **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
+6. **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
    and reads `~/.ssh/config` from. The smoke test uses it; **never override
    `HOME` instead** — macOS finds the login keychain through `HOME`.
    **`FLY_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a
    folder, so tests never put files in the user's real Trash.
+   **`FLY_DEV_DOWNLOADS`** (unpackaged only, and only alongside `FLY_DEV_HOME`)
+   is where downloads go, so tests never write to the real Downloads folder;
+   without it an unpackaged run with `FLY_DEV_HOME` downloads into that fixture.
    Unpackaged runs keep app data in `…/Application Support/Fly (development)`
    unless `--user-data-dir` is given; the installed app uses its own folder.
 7. **Keychain namespaces:** `Fly` (packaged), `Fly (development)` (`npm run dev`
@@ -447,6 +447,12 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   open; nothing is ever typed into a running shell. While a terminal has focus the
   menu's file commands are disabled, so their keys reach the shell
   (`TERMINAL_SUPPRESSED_COMMANDS`).
+- **A download nobody aimed goes to the Downloads folder** (user request,
+  2026-10-01), falling back to the home folder when there is none
+  (`downloadDirectory`). The Download button, the context menu and `Cmd+T` use it,
+  and the button's tooltip names it. **Dragging is how you choose somewhere else:**
+  a drop on a folder row goes to that folder, a drop on a pane to the folder it
+  shows. The local pane itself still opens in the home folder.
 - **A folder being opened says so** (user request, 2026-09-14): `useDirectory.loadingPath`
   marks its row (`aria-busy`, spinner + "Opening…", shown after 150 ms via
   `.reveal-after-delay` so quick loads don't flash). Opening a folder whose listing is

@@ -9,6 +9,7 @@ export const IPC = {
   SYSTEM_GET_VERSION: 'system:get-version',
   APP_SHOW_CONTEXT_MENU: 'app:show-context-menu',
   LOCAL_GET_START_DIRECTORY: 'local:get-start-directory',
+  LOCAL_GET_DOWNLOAD_FOLDER: 'local:get-download-folder',
   LOCAL_LIST_DIRECTORY: 'local:list-directory',
   SFTP_TRUST_HOST_KEY_AND_CONNECT: 'sftp:trust-host-key-and-connect',
   SFTP_FORGET_HOST_KEY: 'sftp:forget-host-key',
