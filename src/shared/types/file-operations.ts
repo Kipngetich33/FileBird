@@ -15,3 +15,13 @@ export interface DeleteOutcome {
   deleted: number
   failures: DeleteFailure[]
 }
+
+/** Moving items into a folder on the same side (Milestone 12). */
+export const MAX_MOVE_ITEMS = 1_000
+
+export interface MoveOutcome {
+  moved: number
+  /** Items already in that folder: nothing to do, and not a failure. */
+  alreadyThere: number
+  failures: DeleteFailure[]
+}

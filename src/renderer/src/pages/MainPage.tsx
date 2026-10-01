@@ -43,7 +43,8 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
       trash: true,
       createFolder: (parent, name) => filesService.createFolder(target, parent, name),
       rename: (path, newName) => filesService.rename(target, path, newName),
-      remove: (paths) => filesService.remove(target, paths)
+      remove: (paths) => filesService.remove(target, paths),
+      move: (paths, destination) => filesService.move(target, paths, destination)
     }
   }, [platform])
   const [active, setActive] = useState<PaneId>('local')

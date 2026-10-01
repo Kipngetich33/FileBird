@@ -115,6 +115,40 @@ describe('FileOperationsService against OpenSSH', () => {
     await server.exec('chmod 755 /config/work/stuck/locked')
   })
 
+  it('moves items into a folder on the server, without copying or overwriting', async () => {
+    await server.exec('mkdir -p /config/moving/inbox && printf one > /config/moving/a.txt && printf two > /config/moving/b.txt')
+    await server.exec('printf taken > /config/moving/inbox/b.txt && chown -R 1000:1000 /config/moving')
+
+    const outcome = await operations.move(remote, ['/config/moving/a.txt', '/config/moving/b.txt'], '/config/moving/inbox')
+    expect(outcome.moved).toBe(1)
+    expect(outcome.alreadyThere).toBe(0)
+    expect(outcome.failures.map((failure) => [failure.name, failure.error.code])).toEqual([['b.txt', 'ALREADY_EXISTS']])
+
+    // The one that moved is there once; the one that clashed left both files untouched.
+    expect((await ls('/config/moving/inbox')).sort()).toEqual(['a.txt', 'b.txt'])
+    expect(await ls('/config/moving')).toEqual(['b.txt', 'inbox'])
+    expect(await server.exec('cat /config/moving/inbox/b.txt')).toBe('taken')
+    expect(await server.exec('cat /config/moving/b.txt')).toBe('two')
+    expect(await server.exec('cat /config/moving/inbox/a.txt')).toBe('one')
+  })
+
+  it('moves a whole folder, and refuses to move one inside itself', async () => {
+    await server.exec('mkdir -p /config/tree/branch/leaf && printf x > /config/tree/branch/leaf/deep.txt && chown -R 1000:1000 /config/tree')
+
+    expect((await operations.move(remote, ['/config/tree/branch'], '/config/tree/branch/leaf')).failures[0]?.error.code).toBe('NOT_ALLOWED')
+    expect(await ls('/config/tree')).toEqual(['branch'])
+
+    await server.exec('mkdir -p /config/tree/elsewhere && chown 1000:1000 /config/tree/elsewhere')
+    expect((await operations.move(remote, ['/config/tree/branch'], '/config/tree/elsewhere')).moved).toBe(1)
+    expect(await ls('/config/tree/elsewhere/branch/leaf')).toEqual(['deep.txt'])
+  })
+
+  it('refuses to move the home folder, and refuses a destination that is not a folder', async () => {
+    await server.exec('printf file > /config/not-a-folder.txt && chown 1000:1000 /config/not-a-folder.txt')
+    expect(await codeOf(operations.move(remote, ['/config'], '/config/moving'))).toBe('NOT_ALLOWED')
+    expect(await codeOf(operations.move(remote, ['/config/moving'], '/config/not-a-folder.txt'))).toBe('NOT_A_DIRECTORY')
+  })
+
   it('refuses the home folder, its ancestors and the root, before deleting anything', async () => {
     await server.exec('printf s > /config/work/survivor.txt && chown 1000:1000 /config/work/survivor.txt')
     expect(await codeOf(operations.delete(remote, ['/config/work/survivor.txt', '/config']))).toBe('NOT_ALLOWED')

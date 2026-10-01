@@ -1,4 +1,4 @@
-import type { DeleteOutcome } from '@shared/types/file-operations'
+import type { DeleteOutcome, MoveOutcome } from '@shared/types/file-operations'
 import type { FileEntry } from '@shared/types/files'
 
 export type PaneId = 'local' | 'remote'
@@ -35,4 +35,6 @@ export interface PaneOperations {
   createFolder: (parent: string, name: string) => Promise<string>
   rename: (path: string, newName: string) => Promise<string>
   remove: (paths: string[]) => Promise<DeleteOutcome>
+  /** Moves items into a folder on this same side (Milestone 12). */
+  move: (paths: string[], destination: string) => Promise<MoveOutcome>
 }

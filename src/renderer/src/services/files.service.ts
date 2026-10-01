@@ -1,4 +1,4 @@
-import type { DeleteOutcome, FileTarget } from '@shared/types/file-operations'
+import type { DeleteOutcome, FileTarget, MoveOutcome } from '@shared/types/file-operations'
 import { toAppError } from './errors'
 
 async function call<T>(invoke: () => Promise<T>): Promise<T> {
@@ -15,5 +15,7 @@ export const filesService = {
     call(() => window.api.files.createFolder(target, parent, name)),
   rename: (target: FileTarget, path: string, newName: string): Promise<string> =>
     call(() => window.api.files.rename(target, path, newName)),
-  remove: (target: FileTarget, paths: string[]): Promise<DeleteOutcome> => call(() => window.api.files.delete(target, paths))
+  remove: (target: FileTarget, paths: string[]): Promise<DeleteOutcome> => call(() => window.api.files.delete(target, paths)),
+  move: (target: FileTarget, paths: string[], destination: string): Promise<MoveOutcome> =>
+    call(() => window.api.files.move(target, paths, destination))
 }

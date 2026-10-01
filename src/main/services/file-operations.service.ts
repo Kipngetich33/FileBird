@@ -1,7 +1,7 @@
 import { lstat, mkdir, rename } from 'node:fs/promises'
-import { basename, dirname, join, posix } from 'node:path'
+import { basename, dirname, join, posix, sep } from 'node:path'
 import { nameProblem } from '../../shared/names'
-import type { DeleteFailure, DeleteOutcome, FileTarget } from '../../shared/types/file-operations'
+import type { DeleteFailure, DeleteOutcome, FileTarget, MoveOutcome } from '../../shared/types/file-operations'
 import { AppError, errnoOf } from '../errors'
 import { createLogger } from '../logger'
 import type { SftpProvider } from '../sftp/sftp-provider'
@@ -25,7 +25,7 @@ export interface FileOperationsOptions {
   remoteHomeOf: (connectionId: string) => string | null
 }
 
-type Verb = 'create' | 'rename' | 'delete'
+type Verb = 'create' | 'rename' | 'delete' | 'move'
 
 const notAllowed = (): AppError =>
   new AppError('NOT_ALLOWED', `${APP_NAME} won't delete or rename your home folder, or a folder that contains it.`)
@@ -41,7 +41,9 @@ function reword(error: unknown, verb: Verb): unknown {
           ? "You don't have permission to create a folder here."
           : verb === 'rename'
             ? "You don't have permission to rename this."
-            : "You don't have permission to delete this."
+            : verb === 'move'
+              ? "You don't have permission to move this."
+              : "You don't have permission to delete this."
       )
     case 'NOT_FOUND':
       return new AppError('NOT_FOUND', verb === 'create' ? 'This folder no longer exists.' : 'It no longer exists.')
@@ -144,6 +146,74 @@ export class FileOperationsService {
       throw reword(error, 'rename')
     }
     return destination
+  }
+
+  /**
+   * Moves items into a folder on the same side (Milestone 12): dragging a file
+   * onto a folder in the pane it is already in.
+   *
+   * A move is a rename, so it never copies and never overwrites: a name already
+   * in the destination fails that item and leaves both copies alone. Items
+   * already in that folder are counted apart, because dropping something where
+   * it already is should do nothing rather than report an error.
+   */
+  async move(target: FileTarget, paths: string[], destination: string): Promise<MoveOutcome> {
+    for (const path of paths) this.assertUnprotected(target, path)
+    const provider = target.side === 'remote' ? this.options.providerFor(target.connectionId) : null
+    const parentOf = (path: string): string => (target.side === 'local' ? dirname(path) : posix.dirname(path))
+    const nameOf = (path: string): string => (target.side === 'local' ? basename(path) : posix.basename(path))
+    const into = (path: string): string => (target.side === 'local' ? join(destination, nameOf(path)) : posix.join(destination, nameOf(path)))
+
+    if (provider === null) {
+      const folder = await lstat(destination).catch((error: unknown) => Promise.reject(localError(error, 'move')))
+      if (!folder.isDirectory()) throw new AppError('NOT_A_DIRECTORY', 'That is not a folder.')
+    } else if ((await provider.stat(destination))?.kind !== 'directory') {
+      throw new AppError('NOT_A_DIRECTORY', 'That is not a folder.')
+    }
+
+    let moved = 0
+    let alreadyThere = 0
+    const failures: DeleteFailure[] = []
+    for (const path of paths) {
+      const name = nameOf(path)
+      try {
+        if (parentOf(path) === destination) {
+          alreadyThere += 1
+          continue
+        }
+        // A folder cannot be moved inside itself: the destination would travel with it.
+        if (destination === path || destination.startsWith(`${path}${target.side === 'local' ? sep : '/'}`)) {
+          throw new AppError('NOT_ALLOWED', `"${name}" can't be moved inside itself.`)
+        }
+        if (provider === null) await this.moveLocal(path, into(path))
+        else await provider.renameNoReplace(path, into(path))
+        moved += 1
+      } catch (cause) {
+        const error = reword(cause, 'move')
+        if (error instanceof AppError) {
+          failures.push({ name, path, error: error.toPayload() })
+        } else {
+          log.error('Move failed', { error: error instanceof Error ? error.stack : String(error) })
+          failures.push({ name, path, error: { code: 'INTERNAL', message: 'Something went wrong while moving this.' } })
+        }
+        if (error instanceof AppError && (error.code === 'CONNECTION_LOST' || error.code === 'NOT_CONNECTED')) break
+      }
+    }
+    log.info('Moved', { side: target.side, requested: paths.length, moved, alreadyThere, failed: failures.length })
+    return { moved, alreadyThere, failures }
+  }
+
+  private async moveLocal(path: string, destination: string): Promise<void> {
+    if (await exists(destination)) throw new AppError('ALREADY_EXISTS', 'An item with this name is already in that folder.')
+    try {
+      await rename(path, destination)
+    } catch (error) {
+      // Another disk can't be renamed onto; that needs a copy, which this isn't.
+      if (errnoOf(error) === 'EXDEV') {
+        throw new AppError('NOT_ALLOWED', "That folder is on another disk. Moving between disks isn't supported yet; copy it through the other pane instead.")
+      }
+      throw localError(error, 'move')
+    }
   }
 
   /** Validates every path first, then deletes each item; one failure doesn't stop the rest. */

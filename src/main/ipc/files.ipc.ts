@@ -1,5 +1,5 @@
 import { IPC } from '../../shared/constants/channels'
-import { MAX_DELETE_ITEMS, type DeleteOutcome, type FileTarget } from '../../shared/types/file-operations'
+import { MAX_DELETE_ITEMS, MAX_MOVE_ITEMS, type DeleteOutcome, type FileTarget, type MoveOutcome } from '../../shared/types/file-operations'
 import { AppError } from '../errors'
 import type { FileOperationsService } from '../services/file-operations.service'
 import { handle } from './handle'
@@ -34,5 +34,17 @@ export function registerFilesIpc(operations: FileOperationsService): void {
       throw new AppError('INVALID_INPUT', `Choose between 1 and ${MAX_DELETE_ITEMS} items to delete.`)
     }
     return operations.delete(target, paths.map((path: unknown) => pathFor(target, path, 'paths')))
+  })
+
+  handle<MoveOutcome>(IPC.FILES_MOVE, (rawTarget, paths, destination) => {
+    const target = assertTarget(rawTarget)
+    if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_MOVE_ITEMS) {
+      throw new AppError('INVALID_INPUT', `Choose between 1 and ${MAX_MOVE_ITEMS} items to move.`)
+    }
+    return operations.move(
+      target,
+      paths.map((path: unknown) => pathFor(target, path, 'paths')),
+      pathFor(target, destination, 'destination')
+    )
   })
 }

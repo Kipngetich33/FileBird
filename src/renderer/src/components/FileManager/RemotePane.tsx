@@ -333,7 +333,8 @@ function ConnectedPane({
       trash: false,
       createFolder: (parent, name) => filesService.createFolder(target, parent, name),
       rename: (path, newName) => filesService.rename(target, path, newName),
-      remove: (paths) => filesService.remove(target, paths)
+      remove: (paths) => filesService.remove(target, paths),
+      move: (paths, destination) => filesService.move(target, paths, destination)
     }
   }, [connection])
 

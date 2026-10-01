@@ -112,12 +112,19 @@ export function FilePane({
   const [operationBusy, setOperationBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [operationMessage, setOperationMessage] = useState<string | null>(null)
-  /** The folder a drag from the other pane would drop into, while one is over this pane. */
+  /** The folder a drag would drop into, while one is over this pane. */
   const [dropDestination, setDropDestination] = useState<string | null>(null)
+  /** True while that drop would move items within this pane rather than transfer them. */
+  const [dropMoves, setDropMoves] = useState(false)
+  /** What a drag that started in this pane is carrying; a drag's data can't be read while it moves. */
+  const dragging = useRef<ReadonlySet<string>>(new Set())
 
   // A drag cancelled or dropped elsewhere must not leave the highlight behind.
   useEffect(() => {
-    const clear = (): void => setDropDestination(null)
+    const clear = (): void => {
+      setDropDestination(null)
+      dragging.current = new Set()
+    }
     window.addEventListener('dragend', clear)
     window.addEventListener('drop', clear)
     return () => {
@@ -130,8 +137,10 @@ export function FilePane({
     // Dragging a selected row takes the whole selection; any other row becomes the selection.
     const dragged = selectedPaths.has(entry.path) ? selectedEntries : [entry]
     if (!selectedPaths.has(entry.path)) select(entry.path)
+    // Remembered for a drop back in this pane: the items decide which folder rows can take them.
+    dragging.current = new Set(dragged.map((item) => item.path))
     event.dataTransfer.setData(dragType(side), encodeDrag(dragged))
-    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.effectAllowed = 'copyMove'
 
     const chip = document.createElement('div')
     chip.textContent = dragged.length === 1 ? (dragged[0]?.name ?? '') : `${dragged.length} items`
@@ -142,12 +151,27 @@ export function FilePane({
     setTimeout(() => chip.remove(), 0)
   }
 
-  /** The destination for a drag over this pane, or null when the drag isn't one this pane accepts. */
-  function destinationFor(event: DragEvent): string | null {
+  /**
+   * Where a drag over this pane would land, or null when this pane won't take it.
+   *
+   * From the other pane: the folder row under the pointer, else the folder on
+   * show — that is a transfer. From this pane: a folder row only, and never one
+   * of the items being dragged — that is a move within this side (Milestone 12).
+   */
+  function destinationFor(event: DragEvent): { path: string; moves: boolean } | null {
     const source = dragSourceOf([...event.dataTransfer.types])
-    if (onDropEntries === undefined || listing === null || source === null || source === side) return null
+    if (listing === null || source === null) return null
     const folderRow = event.target instanceof Element ? event.target.closest<HTMLElement>('[role="row"][data-kind="directory"]') : null
-    return folderRow?.dataset.path ?? listing.path
+
+    if (source === side) {
+      const folder = folderRow?.dataset.path
+      // Dropping items on themselves, or on a folder travelling with them, does nothing.
+      if (operations === undefined || folder === undefined || dragging.current.has(folder)) return null
+      return { path: folder, moves: true }
+    }
+
+    if (onDropEntries === undefined) return null
+    return { path: folderRow?.dataset.path ?? listing.path, moves: false }
   }
 
   function onDragOver(event: DragEvent): void {
@@ -157,8 +181,9 @@ export function FilePane({
       return
     }
     event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-    if (destination !== dropDestination) setDropDestination(destination)
+    event.dataTransfer.dropEffect = destination.moves ? 'move' : 'copy'
+    if (destination.path !== dropDestination) setDropDestination(destination.path)
+    if (destination.moves !== dropMoves) setDropMoves(destination.moves)
   }
 
   function onDragLeave(event: DragEvent): void {
@@ -169,10 +194,32 @@ export function FilePane({
     const destination = destinationFor(event)
     setDropDestination(null)
     const source = dragSourceOf([...event.dataTransfer.types])
-    if (destination === null || source === null || onDropEntries === undefined) return
+    if (destination === null || source === null) return
     event.preventDefault()
     const entries = decodeDrag(event.dataTransfer.getData(dragType(source)))
-    if (entries !== null) onDropEntries(source, entries, destination)
+    if (entries === null) return
+    if (destination.moves) void moveInto(entries.map((entry) => entry.path), destination.path)
+    else onDropEntries?.(source, entries, destination.path)
+  }
+
+  /** A drop inside this pane: move those items into that folder, and say what happened. */
+  async function moveInto(paths: string[], destination: string): Promise<void> {
+    if (operations === undefined) return
+    setOperationMessage(null)
+    try {
+      const outcome = await operations.move(paths, destination)
+      const failure = outcome.failures[0]
+      if (failure !== undefined) {
+        setOperationMessage(
+          outcome.failures.length === 1
+            ? `Couldn't move "${failure.name}": ${failure.error.message}`
+            : `Couldn't move ${outcome.failures.length} of ${paths.length} items: ${failure.error.message}`
+        )
+      }
+      if (outcome.moved > 0) await refresh()
+    } catch (cause) {
+      setOperationMessage((cause as AppErrorPayload).message)
+    }
   }
 
   /** Opens the search box, or focuses it when it is already open. */
@@ -580,7 +627,7 @@ export function FilePane({
             data-testid="drop-label"
             className="pointer-events-none absolute inset-x-3 bottom-8 truncate rounded-md bg-sky-600 px-3 py-1.5 text-center text-[12px] font-medium text-white shadow-lg"
           >
-            {side === 'remote' ? 'Upload' : 'Download'} to {dropDestination}
+            {dropMoves ? 'Move' : side === 'remote' ? 'Upload' : 'Download'} to {dropDestination}
           </div>
         )}
 

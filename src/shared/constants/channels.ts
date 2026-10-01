@@ -37,6 +37,7 @@ export const IPC = {
   FILES_CREATE_FOLDER: 'files:create-folder',
   FILES_RENAME: 'files:rename',
   FILES_DELETE: 'files:delete',
+  FILES_MOVE: 'files:move',
   TERMINAL_OPEN: 'terminal:open',
   TERMINAL_WRITE: 'terminal:write',
   TERMINAL_RESIZE: 'terminal:resize',

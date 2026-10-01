@@ -9,7 +9,7 @@ import type {
   SecretEntry
 } from '../shared/types/connections'
 import type { DirectoryListing } from '../shared/types/files'
-import type { DeleteOutcome, FileTarget } from '../shared/types/file-operations'
+import type { DeleteOutcome, FileTarget, MoveOutcome } from '../shared/types/file-operations'
 import type { ContextMenuAction, ContextMenuItem } from '../shared/types/context-menu'
 import { type MenuCommand, isMenuCommand } from '../shared/types/menu'
 import type { TerminalDataEvent, TerminalExitEvent, TerminalOpenInput, TerminalOpened } from '../shared/types/terminal'
@@ -78,7 +78,10 @@ const api = {
       ipcRenderer.invoke(IPC.FILES_CREATE_FOLDER, target, parent, name),
     rename: (target: FileTarget, path: string, newName: string): Promise<string> =>
       ipcRenderer.invoke(IPC.FILES_RENAME, target, path, newName),
-    delete: (target: FileTarget, paths: string[]): Promise<DeleteOutcome> => ipcRenderer.invoke(IPC.FILES_DELETE, target, paths)
+    delete: (target: FileTarget, paths: string[]): Promise<DeleteOutcome> => ipcRenderer.invoke(IPC.FILES_DELETE, target, paths),
+    /** Moves items into a folder on the same side; never copies, never overwrites. */
+    move: (target: FileTarget, paths: string[], destination: string): Promise<MoveOutcome> =>
+      ipcRenderer.invoke(IPC.FILES_MOVE, target, paths, destination)
   },
   transfers: {
     start: (request: StartTransferRequest): Promise<StartTransferOutcome> =>

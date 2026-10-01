@@ -367,7 +367,7 @@ async function launchApp() {
     },
     /** Types into the terminal that has focus, as a person would, then Enter. */
     async typeInTerminal(scope, line) {
-      await js(`document.querySelector(${q(`${scope} .xterm-helper-textarea`)}).focus()`)
+      await js(`document.querySelector(${q(`${scope} .xterm-helper-textarea`)})?.focus()`)
       await send('Input.insertText', { text: line })
       await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
@@ -502,7 +502,7 @@ try {
       JSON.stringify({
         app: ['onMenuCommand', 'showContextMenu'],
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
-        files: ['createFolder', 'delete', 'rename'],
+        files: ['createFolder', 'delete', 'move', 'rename'],
         keys: ['inspect', 'pick'],
         local: ['getDownloadFolder', 'getStartDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
@@ -567,7 +567,7 @@ try {
     await app.js(pathOf(LOCAL)),
     await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)} && document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path === ${q(join(fixture, 'alpha'))}`)
   )
-  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
   await app.press('Enter', 'Enter', 13)
   record('UI local: Enter opens the selected folder', await app.js(pathOf(LOCAL)), await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`))
   await app.press('Backspace', 'Backspace', 8)
@@ -588,7 +588,7 @@ try {
     { underPointer, path: await app.js(pathOf(LOCAL)) },
     underPointer !== null && underPointer.startsWith(join(fixture, 'alpha') + '/') && (await app.js(pathOf(LOCAL))) === join(fixture, 'alpha')
   )
-  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
   await app.press('Backspace', 'Backspace', 8)
   await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)}`)
   await rm(join(fixture, 'alpha', 'a-inner'), { recursive: true })
@@ -648,14 +648,14 @@ try {
   const resetBox = await app.js(box(SEPARATOR))
   await app.mouseClick(resetBox.x + resetBox.w / 2, sepY, 2)
   const afterReset = await app.js(splitValue)
-  await app.js(`document.querySelector(${q(SEPARATOR)}).focus()`)
+  await app.js(`document.querySelector(${q(SEPARATOR)})?.focus()`)
   for (let i = 0; i < 5; i++) await app.press('ArrowRight', 'ArrowRight', 39)
   const expectedSplit = await app.js(splitValue)
   record('splitter: double-click resets to 50, and → moves it in 2% steps', { afterReset, expectedSplit }, afterReset === 50 && expectedSplit === 60)
 
   // ------------------------------------------------- M5: active pane ---
 
-  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
   record('active pane: the local pane is active once focused', await app.js(textOf('[data-testid="status-active-pane"]')), (await app.js(LOCAL_PANE_ACTIVE)) && (await app.js(`document.querySelector(${q(PANE)})?.dataset.active === 'false'`)))
 
   const remoteBox = await app.js(box(PANE))
@@ -672,7 +672,7 @@ try {
   await app.clickMenu('command:focus-remote')
   record('menu: View › Focus Remote Pane focuses and activates the remote pane', '', (await app.waitFor(`document.querySelector(${q(PANE)})?.dataset.active === 'true'`)) && (await app.js(insidePane(PANE))))
 
-  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
   await app.press('Tab', 'Tab', 9)
   const tabbedToRemote = (await app.waitFor(insidePane(PANE))) && (await app.js(`document.querySelector(${q(PANE)})?.dataset.active === 'true'`))
   await app.press('Tab', 'Tab', 9, 8)
@@ -874,7 +874,7 @@ try {
     { openedFromMenu, emptyMenu, newFolderAsked },
     openedFromMenu && newFolderAsked && JSON.stringify(emptyMenu) === JSON.stringify(['New Folder', '—', 'Refresh'])
   )
-  await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+  await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
   await app.press('Backspace', 'Backspace', 8)
   await app.waitFor(`${pathOf(LOCAL)} === ${q(fixture)}`)
   await app.contextMenu(rowFor(join(fixture, 'file10.txt')), 'Rename…')
@@ -1355,6 +1355,13 @@ try {
   }
   const jobCount = `document.querySelectorAll(${q(`${PANEL} li[data-status]`)}).length`
   const dropLabel = (scope) => textOf(`${scope} [data-testid="drop-label"]`)
+  /** Closes a pane's search, so later checks see the whole folder again. */
+  const clickSearchClose = async (scope) => {
+    if (!(await app.js(exists(`${scope} [data-testid="search-close"]`)))) return
+    const r = await app.js(box(`${scope} [data-testid="search-close"]`))
+    await app.mouseClick(r.x + r.w / 2, r.y + r.h / 2)
+    await app.waitFor(`!${exists(`${scope} [data-testid="pane-search"]`)}`, 5000)
+  }
 
   // Local → remote: a Cmd-selected file and folder onto the remote listing (over a file row).
   await writeFile(join(fixture, 'drag-a.txt'), randomBytes(50_000))
@@ -1403,23 +1410,90 @@ try {
       (await readFile(join(fixture, 'alpha', 'drag-down.txt'), 'utf8').catch(() => '')) === 'down'
   )
 
-  // Within one pane: no highlight, nothing queued, nothing moved.
+  // Within one pane: a folder row takes the drop, and that is a move, not a transfer.
+  // The search box narrows the list first, so both rows are on screen together:
+  // scrolling one into view would move the other, and the drag would start on the wrong row.
+  const twoRowPoints = async (scope, first, second) => {
+    const points = await app.js(`(() => {
+      const rows = [...document.querySelectorAll(${q(`${scope} [role="row"][data-path]`)})]
+      const find = (path) => { const row = rows.find((r) => r.dataset.path === path); if (!row) return null; const b = row.getBoundingClientRect(); return { x: b.left + 40, y: b.top + b.height / 2 } }
+      return JSON.stringify({ first: find(${q(first)}), second: find(${q(second)}) })
+    })()`)
+    return JSON.parse(points)
+  }
+
   const jobsBefore = await app.js(jobCount)
   await app.clickMenu('command:focus-local')
-  await selectRow(join(fixture, 'file2.txt'))
-  const sameDrag = await app.startDrag(await rowPoint(join(fixture, 'file2.txt')), await rowPoint(join(fixture, 'project')))
-  await sameDrag.hover()
-  const sameHover = {
-    label: await app.js(exists(`${LOCAL} [data-testid="drop-label"]`)),
-    rowHighlighted: await app.js(`document.querySelector(${q(rowFor(join(fixture, 'project')))})?.dataset.dropTarget === 'true'`)
+  await mkdir(join(fixture, 'move-target'))
+  await writeFile(join(fixture, 'move-me.txt'), 'moving house')
+  await app.clickMenu('command:refresh')
+  await app.waitFor(exists(rowFor(join(fixture, 'move-me.txt'))), 10000)
+  await app.clickMenu('command:find')
+  await app.waitFor(exists(`${LOCAL} [data-testid="pane-search"]`))
+  await app.type(`${LOCAL} [data-testid="pane-search"]`, 'move-')
+  await app.waitFor(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length === 2`, 5000)
+  const localPoints = await twoRowPoints(LOCAL, join(fixture, 'move-me.txt'), join(fixture, 'move-target'))
+  const moveDrag = await app.startDrag(localPoints.first, localPoints.second)
+  await moveDrag.hover()
+  const moveHover = {
+    label: await app.js(dropLabel(LOCAL)),
+    rowHighlighted: await app.js(`document.querySelector(${q(rowFor(join(fixture, 'move-target')))})?.dataset.dropTarget === 'true'`)
   }
-  await sameDrag.drop()
+  await moveDrag.drop()
+  const movedAway = await app.waitFor(`!${exists(rowFor(join(fixture, 'move-me.txt')))}`, 10000)
+  record(
+    'UI drag: dragging onto a folder in the same pane moves it there, with no transfer queued',
+    { moveHover, movedAway, jobsBefore, jobsAfter: await app.js(jobCount), target: await readdir(join(fixture, 'move-target')) },
+    moveHover.label === `Move to ${join(fixture, 'move-target')}` && moveHover.rowHighlighted && movedAway &&
+      (await readFile(join(fixture, 'move-target', 'move-me.txt'), 'utf8').catch(() => '')) === 'moving house' &&
+      (await app.js(jobCount)) === jobsBefore
+  )
+  await clickSearchClose(LOCAL)
+
+  // A file row is not a destination: only folders take a drop from the same pane.
+  await app.clickMenu('command:find')
+  await app.waitFor(exists(`${LOCAL} [data-testid="pane-search"]`))
+  await app.type(`${LOCAL} [data-testid="pane-search"]`, 'drag-')
+  await app.waitFor(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length === 2`, 5000)
+  const filePoints = await twoRowPoints(LOCAL, join(fixture, 'drag-a.txt'), join(fixture, 'drag-dir'))
+  const ontoFile = await app.startDrag(filePoints.second, filePoints.first)
+  await ontoFile.hover()
+  const ontoFileHover = {
+    label: await app.js(exists(`${LOCAL} [data-testid="drop-label"]`)),
+    highlighted: await app.js(`document.querySelector(${q(rowFor(join(fixture, 'drag-a.txt')))})?.dataset.dropTarget === 'true'`)
+  }
+  await ontoFile.drop()
   await sleep(500)
   record(
-    'UI drag: a drag within one pane is refused (no highlight, nothing queued or moved)',
-    { sameHover, jobsBefore, jobsAfter: await app.js(jobCount) },
-    !sameHover.label && !sameHover.rowHighlighted && (await app.js(jobCount)) === jobsBefore && (await stat(join(fixture, 'file2.txt')).then(() => true, () => false))
+    'UI drag: dropping on a file in the same pane does nothing at all',
+    { ontoFileHover, stillThere: await stat(join(fixture, 'drag-dir')).then(() => true, () => false) },
+    !ontoFileHover.label && !ontoFileHover.highlighted && (await stat(join(fixture, 'drag-dir')).then(() => true, () => false))
   )
+  await clickSearchClose(LOCAL)
+
+  // The same move works on the server, over SFTP.
+  await app.clickMenu('command:focus-remote')
+  await server.exec('mkdir -p /config/fixture/move-target && printf "server side" > /config/fixture/move-on-server.txt && chown -R 1000:1000 /config/fixture/move-target /config/fixture/move-on-server.txt')
+  await app.clickMenu('command:refresh')
+  await app.waitFor(exists(rowFor('/config/fixture/move-on-server.txt')), 10000)
+  await app.clickMenu('command:find')
+  await app.waitFor(exists(`${REMOTE} [data-testid="pane-search"]`))
+  await app.type(`${REMOTE} [data-testid="pane-search"]`, 'move-')
+  await app.waitFor(`document.querySelectorAll(${q(`${REMOTE} [role="row"][data-path]`)}).length === 2`, 5000)
+  const remotePoints = await twoRowPoints(REMOTE, '/config/fixture/move-on-server.txt', '/config/fixture/move-target')
+  const remoteMove = await app.startDrag(remotePoints.first, remotePoints.second)
+  await remoteMove.hover()
+  const remoteMoveLabel = await app.js(dropLabel(REMOTE))
+  await remoteMove.drop()
+  const remoteMovedAway = await app.waitFor(`!${exists(rowFor('/config/fixture/move-on-server.txt'))}`, 10000)
+  record(
+    'UI drag: the same drag moves a file into a folder on the server',
+    { remoteMoveLabel, remoteMovedAway, inTarget: await server.exec('ls -A /config/fixture/move-target') },
+    remoteMoveLabel === 'Move to /config/fixture/move-target' && remoteMovedAway &&
+      (await server.exec('cat /config/fixture/move-target/move-on-server.txt')) === 'server side'
+  )
+  await clickSearchClose(REMOTE)
+  await app.clickMenu('command:focus-local')
 
   // Again onto the same place: the conflict dialog asks first.
   await selectRow(join(fixture, 'drag-a.txt'))
@@ -1505,7 +1579,7 @@ try {
     const localOpened = await app.waitFor(`${pathOf(LOCAL)} === ${q(join(fixture, 'alpha'))}`)
     await app.js(`document.querySelector(${q(`${LOCAL} button[aria-label="Back"]`)}).click()`)
     const localBack = await app.waitFor(`${pathOf(LOCAL)} === ${q(localStart)}`)
-    await app.js(`document.querySelector(${q(LOCAL)}).focus()`)
+    await app.js(`document.querySelector(${q(LOCAL)})?.focus()`)
     await app.press('F5', 'F5', 116)
     const stillLoading = await app.js(`${textOf(REMOTE)}.includes('Loading') && ${pathOf(REMOTE)} === '/config/fixture'`)
     independence = { remoteLoading, localOpened, localBack, stillLoading }

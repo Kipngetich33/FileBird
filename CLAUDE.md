@@ -383,9 +383,14 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   `"type": "module"`.
 - **Navigation** is limited to the dev server origin, or exactly the packaged
   `index.html` (`src/main/navigation.ts`); `navigateOnDragDrop: false` is pinned.
-- **Drag and drop (M9) is between panes only**, as ordinary queued transfers; no
-  drops from Finder/Explorer (would need `webUtils.getPathForFile` + review), no
-  moving within a pane.
+- **Drag and drop:** between panes it is an ordinary queued transfer (M9); within
+  one pane, dropping on a folder row **moves** the items there (user request,
+  2026-10-02) — a rename, so it never copies and never overwrites, refuses a
+  folder into itself, and leaves items already in that folder alone. A move
+  across disks is refused with a message (it would need a copy). Still no drops
+  from Finder/Explorer (would need `webUtils.getPathForFile` + review).
+  **`effectAllowed` is `copyMove`**: a drop whose effect the drag didn't allow
+  never fires at all, which is why a move silently did nothing at first.
 - **One `FileEntry` type for local and remote** (`src/shared/types/files.ts`).
 - **Vitest** for unit tests, not `node:test`: Node's type stripping can't
   resolve this codebase's extensionless imports or path aliases.
