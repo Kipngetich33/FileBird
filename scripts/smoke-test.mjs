@@ -1524,6 +1524,89 @@ try {
     independence.remoteLoading && independence.localOpened && independence.localBack && independence.stillLoading && remoteCaughtUp
   )
 
+  // ------------------------------------------------ M12: searching a folder ---
+
+  const searchBox = (scope) => `${scope} [data-testid="pane-search"]`
+  const rowCount = (scope) => `document.querySelectorAll(${q(`${scope} [role="row"][data-path]`)}).length`
+  const paneCount = (scope) => textOf(`${scope} [data-testid="pane-count"]`)
+
+  await app.clickMenu('command:focus-local')
+  const localRowsBefore = await app.js(rowCount(LOCAL))
+  await app.clickMenu('command:find')
+  const searchOpened = await app.waitFor(exists(searchBox(LOCAL)))
+  await app.type(searchBox(LOCAL), 'file1')
+  const narrowed = await app.waitFor(`${rowCount(LOCAL)} === 1`, 5000)
+  record(
+    'search: typing narrows the pane to the names that match, and the footer says how many of the folder is showing',
+    {
+      before: localRowsBefore,
+      after: await app.js(rowCount(LOCAL)),
+      only: await app.js(`document.querySelector(${q(`${LOCAL} [role="row"][data-path]`)})?.dataset.name ?? document.querySelector(${q(`${LOCAL} [role="row"][data-path]`)})?.dataset.path`),
+      footer: await app.js(paneCount(LOCAL)),
+      matches: await app.js(textOf(`${LOCAL} [data-testid="search-matches"]`))
+    },
+    searchOpened && narrowed && localRowsBefore > 1 &&
+      (await app.js(`document.querySelector(${q(`${LOCAL} [role="row"][data-path]`)})?.dataset.path`)) === join(fixture, 'file10.txt') &&
+      (await app.js(paneCount(LOCAL))) === `1 of ${localRowsBefore} items` &&
+      (await app.js(textOf(`${LOCAL} [data-testid="search-matches"]`))) === '1 match'
+  )
+
+  // Enter hands the keyboard back to the list, with the first match selected.
+  await app.press('Enter', 'Enter', 13)
+  const selectedAfterEnter = await app.waitFor(
+    `document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path === ${q(join(fixture, 'file10.txt'))}`,
+    5000
+  )
+  // Escape gives the whole folder back.
+  await app.clickMenu('command:find')
+  await app.waitFor(exists(searchBox(LOCAL)))
+  await app.type(searchBox(LOCAL), 'nothing-matches-this')
+  const emptied = await app.waitFor(`${rowCount(LOCAL)} === 0`, 5000)
+  const nothingMatches = await app.js(textOf(`${LOCAL} [data-testid="search-matches"]`))
+  await app.press('Escape', 'Escape', 27)
+  const folderBack = await app.waitFor(`${rowCount(LOCAL)} === ${localRowsBefore} && !${exists(searchBox(LOCAL))}`, 5000)
+  record(
+    'search: Enter selects the first match, a search with no matches says so, and Escape gives the folder back',
+    { selectedAfterEnter, emptied, nothingMatches, folderBack },
+    selectedAfterEnter && emptied && nothingMatches === 'nothing matches' && folderBack
+  )
+
+  // The remote pane searches its own folder, and the two don't interfere.
+  await app.clickMenu('command:focus-remote')
+  // Earlier checks may have left this pane deep in the tree, in a folder with nothing in it.
+  for (let up = 0; up < 3 && (await app.js(pathOf(REMOTE))) !== '/config/fixture'; up += 1) {
+    await app.clickMenu('command:go-up')
+    await sleep(500)
+  }
+  await app.waitFor(`${rowCount(REMOTE)} > 0`, 10000)
+  const remoteRowsBefore = await app.js(rowCount(REMOTE))
+  await app.clickMenu('command:find')
+  await app.waitFor(exists(searchBox(REMOTE)))
+  await app.type(searchBox(REMOTE), 'alpha')
+  const remoteNarrowed = await app.waitFor(`${rowCount(REMOTE)} === 2`, 5000)
+  record(
+    'search: the remote pane searches its own folder, and the local pane is untouched',
+    {
+      remoteBefore: remoteRowsBefore,
+      remoteAfter: await app.js(rowCount(REMOTE)),
+      localStill: await app.js(rowCount(LOCAL)),
+      localHasNoBox: !(await app.js(exists(searchBox(LOCAL))))
+    },
+    remoteNarrowed && (await app.js(rowCount(LOCAL))) === localRowsBefore && !(await app.js(exists(searchBox(LOCAL))))
+  )
+
+  // Opening a folder starts fresh: a search left behind would hide things silently.
+  await app.contextMenu(rowFor('/config/fixture/alpha'), 'Open')
+  const openedAlpha = await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture/alpha'`, 10000)
+  const searchClearedOnOpen = await app.waitFor(`document.querySelector(${q(searchBox(REMOTE))})?.value === ''`, 5000)
+  await app.clickMenu('command:go-up')
+  await app.waitFor(`${pathOf(REMOTE)} === '/config/fixture'`, 10000)
+  record(
+    'search: opening another folder empties the search, so nothing stays hidden, and the box stays ready',
+    { openedAlpha, searchClearedOnOpen, rowsBack: await app.js(rowCount(REMOTE)) },
+    openedAlpha && searchClearedOnOpen && (await app.js(rowCount(REMOTE))) === remoteRowsBefore
+  )
+
   // ------------------------------------------------- M11: terminals in both panes ---
 
   const terminalText = (scope) => `(document.querySelector(${q(`${scope} .xterm-rows`)})?.innerText ?? '')`

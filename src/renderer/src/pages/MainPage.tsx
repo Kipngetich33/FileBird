@@ -159,6 +159,9 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
           case 'toggle-terminal':
             pane(activeRef.current)?.toggleTerminal()
             break
+          case 'find':
+            pane(activeRef.current)?.search()
+            break
           case 'new-folder':
           case 'rename':
           case 'delete': {

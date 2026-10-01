@@ -3,7 +3,9 @@ import type { FileEntry } from '@shared/types/files'
 import { formatSize, typeLabel } from '@renderer/utils/file-entries'
 
 interface PaneFooterProps {
+  /** How many items are listed: fewer than `total` while a search narrows them. */
   count: number | null
+  total: number
   selected: FileEntry[]
 }
 
@@ -17,8 +19,9 @@ function describeSelection(selected: FileEntry[]): string {
 }
 
 /** One pane's own status: how many items, and what is selected. */
-export function PaneFooter({ count, selected }: PaneFooterProps): JSX.Element {
-  const items = count === null ? '' : count === 1 ? '1 item' : `${count} items`
+export function PaneFooter({ count, total, selected }: PaneFooterProps): JSX.Element {
+  const all = count === null ? '' : count === 1 ? '1 item' : `${count} items`
+  const items = count !== null && count !== total ? `${count} of ${total} items` : all
   const detail = describeSelection(selected)
 
   return (

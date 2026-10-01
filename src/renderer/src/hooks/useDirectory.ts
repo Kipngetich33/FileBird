@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppErrorPayload } from '@shared/types/errors'
 import type { DirectoryListing, FileEntry } from '@shared/types/files'
-import { sortEntries } from '@renderer/utils/file-entries'
+import { matchesSearch, sortEntries } from '@renderer/utils/file-entries'
 import { EMPTY_SELECTION, applySelect, pruneSelection, selectAll, type SelectMode, type Selection } from '@renderer/utils/selection'
 
 /** Where a pane's listings come from. Local today; remote plugs in at Milestone 5. */
@@ -12,8 +12,13 @@ export interface DirectorySource {
 
 export interface DirectoryState {
   listing: DirectoryListing | null
-  /** The listing's entries in display order. */
+  /** The listing's entries in display order, and only those the search matches. */
   entries: FileEntry[]
+  /** What the pane's search box holds; empty shows the whole folder. */
+  search: string
+  setSearch: (search: string) => void
+  /** How many entries the folder has, before the search narrowed them. */
+  totalCount: number
   /** The cursor row: where keyboard moves start and what Enter opens. */
   selectedPath: string | null
   selectedPaths: ReadonlySet<string>
@@ -44,6 +49,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
   const [listing, setListing] = useState<DirectoryListing | null>(null)
   const [history, setHistory] = useState<string[]>([])
   const [rawSelection, setSelection] = useState<Selection>(EMPTY_SELECTION)
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingPath, setLoadingPath] = useState<string | null>(null)
   const [error, setError] = useState<AppErrorPayload | null>(null)
@@ -102,6 +108,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
       if (currentPath !== null && currentPath !== next.path) {
         setHistory((previous) => [...previous, currentPath])
       }
+      setSearch('')
       setSelection(EMPTY_SELECTION)
     },
     [load, currentPath]
@@ -112,6 +119,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     if (parentPath === null || currentPath === null) return
     const next = await load(parentPath)
     if (next === null) return
+    setSearch('')
     setHistory((previous) => [...previous, currentPath])
     // Land on the folder we just left, as Finder and Explorer do.
     setSelection(applySelect(EMPTY_SELECTION, [], currentPath))
@@ -124,6 +132,7 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     // must not be stuck pressing Back on it forever.
     setHistory((previous) => previous.slice(0, -1))
     const next = await load(target)
+    if (next !== null) setSearch('')
     if (next !== null) setSelection(currentPath === null ? EMPTY_SELECTION : applySelect(EMPTY_SELECTION, [], currentPath))
   }, [load, history, currentPath])
 
@@ -131,7 +140,10 @@ export function useDirectory(source: DirectorySource): DirectoryState {
     if (currentPath !== null) await load(currentPath)
   }, [load, currentPath])
 
-  const entries = useMemo(() => (listing === null ? [] : sortEntries(listing.entries)), [listing])
+  const sorted = useMemo(() => (listing === null ? [] : sortEntries(listing.entries)), [listing])
+  // Only what the search matches is listed, so anything hidden can't be acted
+  // on by mistake: the selection below is pruned to what is on screen.
+  const entries = useMemo(() => (search.trim() === '' ? sorted : sorted.filter((entry) => matchesSearch(entry.name, search))), [sorted, search])
   const order = useMemo(() => entries.map((entry) => entry.path), [entries])
   // A refresh can remove selected rows; the selection only ever shows listed ones.
   const selection = useMemo(() => pruneSelection(rawSelection, order), [rawSelection, order])
@@ -146,6 +158,9 @@ export function useDirectory(source: DirectorySource): DirectoryState {
   return {
     listing,
     entries,
+    search,
+    setSearch,
+    totalCount: sorted.length,
     selectedPath: selection.cursor,
     selectedPaths,
     selectedEntries,

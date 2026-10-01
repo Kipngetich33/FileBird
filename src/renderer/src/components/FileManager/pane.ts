@@ -18,6 +18,8 @@ export interface PaneHandle {
   refreshIfShowing: (path: string) => void
   /** Switches the pane between its files and its terminal (Milestone 11). */
   toggleTerminal: () => void
+  /** Opens the pane's search box (Milestone 12). */
+  search: () => void
   /** File operations (Milestone 8); each opens its dialog, or does nothing if unavailable. */
   newFolder: () => void
   rename: () => void

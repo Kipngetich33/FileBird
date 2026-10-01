@@ -453,6 +453,12 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   and the button's tooltip names it. **Dragging is how you choose somewhere else:**
   a drop on a folder row goes to that folder, a drop on a pane to the folder it
   shows. The local pane itself still opens in the home folder.
+- **Each pane searches its own folder** (user request, 2026-10-01): a box in the
+  toolbar (`Cmd/Ctrl+F`, or the magnifier) filters the listing by name as you
+  type, case-insensitive, current folder only. Hidden rows leave the selection
+  (`useDirectory` filters before pruning), so nothing invisible can be
+  transferred or deleted. Enter hands the list back the keyboard with the first
+  match selected, Escape clears, and opening another folder empties the search.
 - **A finished transfer offers "Show"** (user request, 2026-10-01), which opens
   Finder / File Explorer at that file (`shell.showItemInFolder`), as a browser's
   downloads list does. Main refuses a path that is no longer there; the button

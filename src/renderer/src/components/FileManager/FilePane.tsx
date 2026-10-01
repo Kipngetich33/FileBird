@@ -20,6 +20,7 @@ import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type Dra
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
 import { TerminalView } from '@renderer/components/Terminal/TerminalView'
 import { NameDialog } from './NameDialog'
+import { PaneSearch } from './PaneSearch'
 import { PaneTabs, type PaneTab } from './PaneTabs'
 import { PaneHeader } from './PaneHeader'
 import { PaneFooter } from './PaneFooter'
@@ -90,13 +91,14 @@ export function FilePane({
   canTransfer = true,
   terminal
 }: FilePaneProps): JSX.Element {
-  const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, loadingPath, error, canGoBack } = directory
-  const { open, goUp, goBack, refresh, select, selectAll, dismissError } = directory
+  const { listing, entries, selectedPath, selectedPaths, selectedEntries, loading, loadingPath, error, canGoBack, search, totalCount } = directory
+  const { open, goUp, goBack, refresh, select, selectAll, dismissError, setSearch } = directory
   const paneRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => paneRef.current?.focus(), [])
 
+  const [searching, setSearching] = useState(false)
   const [tab, setTab] = useState<PaneTab>('files')
   /**
    * The terminal is created the first time it is asked for and then stays, so
@@ -172,6 +174,18 @@ export function FilePane({
     const entries = decodeDrag(event.dataTransfer.getData(dragType(source)))
     if (entries !== null) onDropEntries(source, entries, destination)
   }
+
+  /** Opens the search box, or focuses it when it is already open. */
+  const startSearch = useCallback(() => {
+    setTab('files')
+    setSearching(true)
+  }, [])
+
+  const endSearch = useCallback(() => {
+    setSearching(false)
+    setSearch('')
+    paneRef.current?.focus()
+  }, [setSearch])
 
   const showTerminal = useCallback(
     (next: PaneTab) => {
@@ -269,9 +283,10 @@ export function FilePane({
       newFolder: startNewFolder,
       rename: startRename,
       deleteSelection: startDelete,
-      toggleTerminal: () => showTerminal(tab === 'terminal' ? 'files' : 'terminal')
+      toggleTerminal: () => showTerminal(tab === 'terminal' ? 'files' : 'terminal'),
+      search: startSearch
     }),
-    [refresh, goBack, goUp, listing, selectedEntries, selectAll, startNewFolder, startRename, startDelete, showTerminal, tab]
+    [refresh, goBack, goUp, listing, selectedEntries, selectAll, startNewFolder, startRename, startDelete, showTerminal, tab, startSearch]
   )
 
   // Keep the selected row in view as the keyboard moves it.
@@ -455,7 +470,25 @@ export function FilePane({
           onUp={() => void goUp()}
           onRefresh={() => void refresh()}
           onNewFolder={operations === undefined ? undefined : startNewFolder}
+          onSearch={startSearch}
+          searching={searching}
         />
+
+        {searching && tab === 'files' && (
+          <PaneSearch
+            label={title}
+            value={search}
+            matches={entries.length}
+            onChange={setSearch}
+            onCommit={() => {
+              // Done typing: the list takes the keyboard, starting at the first match.
+              const first = entries[0]
+              if (first !== undefined) select(first.path)
+              paneRef.current?.focus()
+            }}
+            onClose={endSearch}
+          />
+        )}
 
         {operationMessage !== null && (
           <div
@@ -551,7 +584,7 @@ export function FilePane({
           </div>
         )}
 
-        <PaneFooter count={listing === null ? null : entries.length} selected={selectedEntries} />
+        <PaneFooter count={listing === null ? null : entries.length} total={totalCount} selected={selectedEntries} />
       </section>
 
       {/* Outside the section, so keys typed in a dialog never reach the list's shortcuts. */}

@@ -14,6 +14,7 @@ export interface ApplicationMenuOptions {
  * registers a menu accelerator, so Cmd+R and friends would never arrive.
  */
 export const TERMINAL_SUPPRESSED_COMMANDS: MenuCommand[] = [
+  'find',
   'refresh',
   'select-all',
   'go-back',
@@ -91,6 +92,7 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
         // Deliberately not suppressed while a terminal has focus: this is how
         // the keyboard gets back out of it.
         command('toggle-terminal', 'Files / Terminal', 'CmdOrCtrl+`'),
+        command('find', 'Search This Folder', 'CmdOrCtrl+F'),
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

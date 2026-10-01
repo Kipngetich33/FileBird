@@ -84,6 +84,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
       rename: () => connectedPaneRef.current?.rename(),
       deleteSelection: () => connectedPaneRef.current?.deleteSelection(),
       toggleTerminal: () => connectedPaneRef.current?.toggleTerminal(),
+      search: () => connectedPaneRef.current?.search(),
       refreshIfShowing: (path) => connectedPaneRef.current?.refreshIfShowing(path)
     }),
     [connected, reload]

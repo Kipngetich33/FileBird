@@ -8,6 +8,16 @@ import type { FileEntry } from '@shared/types/files'
 const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 /** Folders first, then natural case-insensitive name order (`file2` before `file10`). */
+/**
+ * Whether a name matches what was typed in the pane's search box: the letters
+ * in order, ignoring case and surrounding spaces, anywhere in the name. An
+ * empty search matches everything, so a pane is never mysteriously empty.
+ */
+export function matchesSearch(name: string, search: string): boolean {
+  const wanted = search.trim().toLocaleLowerCase()
+  return wanted === '' || name.toLocaleLowerCase().includes(wanted)
+}
+
 export function sortEntries(entries: readonly FileEntry[]): FileEntry[] {
   return [...entries].sort((a, b) => {
     const aIsDirectory = a.kind === 'directory'

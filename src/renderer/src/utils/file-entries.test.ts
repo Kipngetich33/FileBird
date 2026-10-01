@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FileEntry, FileKind } from '@shared/types/files'
-import { formatModified, formatSize, sortEntries, typeLabel } from './file-entries'
+import { formatModified, formatSize, matchesSearch, sortEntries, typeLabel } from './file-entries'
 
 function entry(name: string, kind: FileKind = 'file', extra: Partial<FileEntry> = {}): FileEntry {
   return {
@@ -83,5 +83,23 @@ describe('typeLabel', () => {
     [entry('socket', 'other'), 'Other']
   ])('labels %j as %s', (item, expected) => {
     expect(typeLabel(item)).toBe(expected)
+  })
+})
+
+describe('matchesSearch', () => {
+  it('matches part of a name, whatever the case', () => {
+    expect(matchesSearch('Quarterly Report.pdf', 'report')).toBe(true)
+    expect(matchesSearch('quarterly report.pdf', 'REPORT')).toBe(true)
+    expect(matchesSearch('notes.txt', 'report')).toBe(false)
+  })
+
+  it('shows the whole folder when nothing has been typed', () => {
+    expect(matchesSearch('anything', '')).toBe(true)
+    expect(matchesSearch('anything', '   ')).toBe(true)
+  })
+
+  it('ignores spaces around what was typed, but not inside it', () => {
+    expect(matchesSearch('my file.txt', '  file ')).toBe(true)
+    expect(matchesSearch('myfile.txt', 'my file')).toBe(false)
   })
 })

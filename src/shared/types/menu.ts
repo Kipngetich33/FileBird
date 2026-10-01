@@ -10,7 +10,8 @@ export const MENU_COMMANDS = [
   'new-folder',
   'rename',
   'delete',
-  'toggle-terminal'
+  'toggle-terminal',
+  'find'
 ] as const
 
 export type MenuCommand = (typeof MENU_COMMANDS)[number]

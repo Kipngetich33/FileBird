@@ -14,6 +14,10 @@ interface PaneHeaderProps {
   onRefresh: () => void
   /** Absent when the pane can't create folders. */
   onNewFolder?: () => void
+  /** Opens this pane's search box. */
+  onSearch: () => void
+  /** Whether the search box is open, so the button reads as pressed. */
+  searching: boolean
   /** Pane-specific controls at the right end, such as Disconnect. */
   actions?: ReactNode
 }
@@ -30,6 +34,8 @@ export function PaneHeader({
   onUp,
   onRefresh,
   onNewFolder,
+  onSearch,
+  searching,
   actions
 }: PaneHeaderProps): JSX.Element {
   return (
@@ -63,6 +69,10 @@ export function PaneHeader({
             <path d="M2 4.5h4l1.5 1.5H14v6.5H2zM8 7.5v3.5M6.25 9.25h3.5" />
           </ToolbarButton>
         )}
+        <ToolbarButton label="Search this folder" disabled={path === null} pressed={searching} onClick={onSearch}>
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="m10.5 10.5 3 3" />
+        </ToolbarButton>
       </div>
 
       {/* Truncates at the start, so the current folder's name stays visible: …/fixture/alpha */}
@@ -90,19 +100,24 @@ interface ToolbarButtonProps {
   label: string
   disabled: boolean
   spinning?: boolean
+  /** A button that stays on while its panel is open. */
+  pressed?: boolean
   onClick: () => void
   children: ReactNode
 }
 
-function ToolbarButton({ label, disabled, spinning = false, onClick, children }: ToolbarButtonProps): JSX.Element {
+function ToolbarButton({ label, disabled, spinning = false, pressed, onClick, children }: ToolbarButtonProps): JSX.Element {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       disabled={disabled}
+      {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onClick}
-      className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+      className={`inline-flex h-6 w-6 items-center justify-center rounded transition hover:bg-white/[0.06] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30 ${
+        pressed === true ? 'bg-white/[0.08] text-sky-300' : 'text-zinc-400'
+      }`}
     >
       <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 fill-none stroke-current stroke-[1.6] ${spinning ? 'animate-spin' : ''}`} aria-hidden>
         {children}

@@ -62,9 +62,9 @@ describe('buildApplicationMenu', () => {
   })
 
   it.each([
-    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: undefined, 'toggle-terminal': 'CmdOrCtrl+`' }],
-    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`' }],
-    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`' }]
+    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: undefined, 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }],
+    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }],
+    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }]
   ] as const)('uses platform-appropriate shortcuts on %s', (platform, expected) => {
     const template = buildApplicationMenu({ platform, isDev: false, send: () => undefined })
     const accelerators = Object.fromEntries(
