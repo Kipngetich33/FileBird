@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, Menu, shell, type OpenDialogOptions } from 'electron'
+import { statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { APP_NAME } from '../shared/constants/app'
 import { IPC_EVENTS } from '../shared/constants/channels'
-import { splashDuration, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
+import { splashDuration, startDirectory, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
 import { registerConnectionsIpc } from './ipc/connections.ipc'
 import { registerContextMenuIpc } from './ipc/context-menu.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
@@ -58,6 +59,33 @@ let askingToQuit = false
  * instead would also hide the macOS login keychain. Packaged builds ignore it.
  */
 const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FLY_DEV_HOME'] : homedir()
+
+/**
+ * Where the local pane opens: the Downloads folder, so downloading a file puts
+ * it where everything else on this computer puts what it fetches. The home
+ * folder stays what ~/.ssh/config is read from and what deletes are guarded
+ * against. A fixture folder (FLY_DEV_HOME, unpackaged) wins over both.
+ */
+const paneStart = startDirectory({
+  home: appHome,
+  downloads: !app.isPackaged && process.env['FLY_DEV_HOME'] ? null : downloadsFolder(),
+  isDirectory: (path) => {
+    try {
+      return statSync(path).isDirectory()
+    } catch {
+      return false
+    }
+  }
+})
+
+function downloadsFolder(): string | null {
+  try {
+    return app.getPath('downloads')
+  } catch {
+    // Some systems have no such folder; the home folder is then the sensible start.
+    return null
+  }
+}
 
 /**
  * Local deletes go to the system Trash. Unpackaged builds accept FLY_DEV_TRASH_DIR
@@ -153,7 +181,7 @@ void app.whenReady().then(() => {
   )
   registerSystemIpc()
   registerContextMenuIpc()
-  registerLocalFilesIpc(appHome)
+  registerLocalFilesIpc(paneStart)
 
   const userData = app.getPath('userData')
 

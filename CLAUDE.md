@@ -86,7 +86,10 @@ verification and a commit.
    — Homebrew has no Intel bottle for it. Test image is pinned:
    `linuxserver/openssh-server:10.3_p1-r1-ls236`. Tests also need the OpenSSH
    client tools (`ssh`, `ssh-keygen`, `ssh-keyscan`), present on macOS.
-6. **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
+6. **The local pane opens in the Downloads folder** (`startDirectory`), because a
+   download goes to the folder that pane is showing; the home folder stays what
+   `~/.ssh/config` is read from and what deletes are guarded against.
+   **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
    and reads `~/.ssh/config` from. The smoke test uses it; **never override
    `HOME` instead** — macOS finds the login keychain through `HOME`.
    **`FLY_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SPLASH_DURATION_MS, splashDuration, splashWait, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
+import { SPLASH_DURATION_MS, splashDuration, splashWait, startDirectory, stopTransfersQuestion, userDataFolder } from './app-lifecycle'
 
 describe('userDataFolder', () => {
   it('separates unpackaged runs from the installed app, unless a folder was given', () => {
@@ -53,5 +53,19 @@ describe('splash timing', () => {
     expect(splashWait({ shownAt: 1_000, now: 2_500, durationMs: 4_000 })).toBe(2_500)
     expect(splashWait({ shownAt: 1_000, now: 9_000, durationMs: 4_000 })).toBe(0)
     expect(splashWait({ shownAt: null, now: 9_000, durationMs: 4_000 })).toBe(4_000)
+  })
+})
+
+describe('startDirectory', () => {
+  const always = (): boolean => true
+
+  it('opens the local pane in Downloads, where everything else puts what it fetches', () => {
+    expect(startDirectory({ home: '/Users/me', downloads: '/Users/me/Downloads', isDirectory: always })).toBe('/Users/me/Downloads')
+  })
+
+  it('falls back to the home folder when there is no Downloads folder to open', () => {
+    expect(startDirectory({ home: '/Users/me', downloads: null, isDirectory: always })).toBe('/Users/me')
+    expect(startDirectory({ home: '/Users/me', downloads: '/Users/me/Downloads', isDirectory: () => false })).toBe('/Users/me')
+    expect(startDirectory({ home: '/Users/me', downloads: '/Users/me', isDirectory: always })).toBe('/Users/me')
   })
 })

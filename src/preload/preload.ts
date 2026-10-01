@@ -42,7 +42,8 @@ const api = {
     getVersion: (): Promise<SystemVersions> => ipcRenderer.invoke(IPC.SYSTEM_GET_VERSION)
   },
   local: {
-    getHomeDirectory: (): Promise<string> => ipcRenderer.invoke(IPC.LOCAL_GET_HOME_DIRECTORY),
+    /** The folder the local pane opens in. */
+    getStartDirectory: (): Promise<string> => ipcRenderer.invoke(IPC.LOCAL_GET_START_DIRECTORY),
     listDirectory: (path: string): Promise<DirectoryListing> =>
       ipcRenderer.invoke(IPC.LOCAL_LIST_DIRECTORY, path)
   },

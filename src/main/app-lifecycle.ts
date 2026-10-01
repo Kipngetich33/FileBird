@@ -15,6 +15,20 @@ export function userDataFolder(options: { isPackaged: boolean; hasUserDataSwitch
   return join(options.appData, options.isPackaged ? 'fly' : 'Fly (development)')
 }
 
+/**
+ * The folder the local pane opens in.
+ *
+ * Downloads, where a browser and most other apps put what they fetch: a
+ * download here goes to the folder that pane is showing, so this is what makes
+ * "Download" land where people expect. Anything missing — no Downloads folder,
+ * or the same folder as home — falls back to the home folder.
+ */
+export function startDirectory(options: { home: string; downloads: string | null; isDirectory: (path: string) => boolean }): string {
+  const { home, downloads, isDirectory } = options
+  if (downloads === null || downloads === home || !isDirectory(downloads)) return home
+  return downloads
+}
+
 export interface StopTransfersQuestion {
   type: 'warning'
   message: string

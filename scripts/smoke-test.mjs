@@ -493,7 +493,7 @@ try {
         connections: ['connect', 'connectUnsaved', 'create', 'delete', 'forgetSecret', 'list', 'update'],
         files: ['createFolder', 'delete', 'rename'],
         keys: ['inspect', 'pick'],
-        local: ['getHomeDirectory', 'listDirectory'],
+        local: ['getStartDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
         sshConfig: ['import', 'preview'],
         system: ['getVersion'],
@@ -507,7 +507,7 @@ try {
 
   // ------------------------------------------------------- local files over IPC ---
 
-  await app.evaluate('getHomeDirectory', `window.api.local.getHomeDirectory()`, (v) => v === fixture)
+  await app.evaluate('getStartDirectory (the fixture folder here; the Downloads folder in a real run)', `window.api.local.getStartDirectory()`, (v) => v === fixture)
   await app.evaluate(
     'listDirectory describes the fixture',
     `(async () => JSON.stringify(await window.api.local.listDirectory(${q(fixture)})))()`,

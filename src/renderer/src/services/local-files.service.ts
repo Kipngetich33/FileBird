@@ -6,7 +6,7 @@ import { toAppError } from './errors'
 export const localFilesService = {
   async getStartDirectory(): Promise<string> {
     try {
-      return await window.api.local.getHomeDirectory()
+      return await window.api.local.getStartDirectory()
     } catch (error) {
       throw toAppError(error)
     }
