@@ -7,6 +7,7 @@
  */
 export const IPC = {
   SYSTEM_GET_VERSION: 'system:get-version',
+  SYSTEM_REVEAL_IN_FOLDER: 'system:reveal-in-folder',
   APP_SHOW_CONTEXT_MENU: 'app:show-context-menu',
   LOCAL_GET_START_DIRECTORY: 'local:get-start-directory',
   LOCAL_GET_DOWNLOAD_FOLDER: 'local:get-download-folder',

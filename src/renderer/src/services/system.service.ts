@@ -15,5 +15,14 @@ export const systemService = {
     } catch (error) {
       throw toAppError(error)
     }
+  },
+
+  /** Shows a file on this computer in Finder or the file manager. */
+  async revealInFolder(path: string): Promise<void> {
+    try {
+      await window.api.system.revealInFolder(path)
+    } catch (error) {
+      throw toAppError(error)
+    }
   }
 }

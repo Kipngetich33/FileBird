@@ -12,6 +12,21 @@ export function formatSpeed(bytesPerSecond: number): string {
   return bytesPerSecond <= 0 ? '' : `${formatSize(Math.round(bytesPerSecond))}/s`
 }
 
+/**
+ * The job's file on this computer: what a download wrote, or what an upload
+ * sent. This is what "Show" opens the file manager at.
+ */
+export function localPathOf(job: TransferJob): string {
+  return job.direction === 'download' ? job.destinationPath : job.sourcePath
+}
+
+/** What the file manager is called here, as the button says it. */
+export function revealLabel(platform: string): string {
+  if (platform === 'darwin') return 'Show in Finder'
+  if (platform === 'win32') return 'Show in File Explorer'
+  return 'Show in the file manager'
+}
+
 export function statusLabel(job: Pick<TransferJob, 'status' | 'direction'>): string {
   switch (job.status) {
     case 'queued':

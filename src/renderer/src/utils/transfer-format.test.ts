@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TransferJob } from '@shared/types/transfers'
-import { describeSkipped, jobDetail, jobFraction, statusLabel, summarizeQueue } from './transfer-format'
+import { describeSkipped, jobDetail, jobFraction, localPathOf, revealLabel, statusLabel, summarizeQueue } from './transfer-format'
 
 let next = 0
 const job = (overrides: Partial<TransferJob>): TransferJob => ({
@@ -78,5 +78,22 @@ describe('describeSkipped', () => {
       )
     ).toBe('Skipped 3 items: links to folders (site/link); items that already exist (a.txt, b.txt).')
     expect(describeSkipped([], 0)).toBe('')
+  })
+})
+
+describe('localPathOf', () => {
+  it('points at what a download wrote, and at what an upload sent', () => {
+    expect(localPathOf(job({ direction: 'download', sourcePath: '/srv/report.pdf', destinationPath: '/Users/me/Downloads/report.pdf' }))).toBe(
+      '/Users/me/Downloads/report.pdf'
+    )
+    expect(localPathOf(job({ direction: 'upload', sourcePath: '/Users/me/report.pdf', destinationPath: '/srv/report.pdf' }))).toBe('/Users/me/report.pdf')
+  })
+})
+
+describe('revealLabel', () => {
+  it('calls the file manager what this computer calls it', () => {
+    expect(revealLabel('darwin')).toBe('Show in Finder')
+    expect(revealLabel('win32')).toBe('Show in File Explorer')
+    expect(revealLabel('linux')).toBe('Show in the file manager')
   })
 })

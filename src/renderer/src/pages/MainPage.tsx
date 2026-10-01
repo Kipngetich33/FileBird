@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import type { AppErrorPayload } from '@shared/types/errors'
 import type { FileEntry } from '@shared/types/files'
 import type { TransferJob } from '@shared/types/transfers'
 import { FilePane } from '@renderer/components/FileManager/FilePane'
@@ -16,6 +17,7 @@ import type { DraggedEntry } from '@renderer/utils/drag'
 import { appService } from '@renderer/services/app.service'
 import { filesService } from '@renderer/services/files.service'
 import { localFilesService } from '@renderer/services/local-files.service'
+import { systemService } from '@renderer/services/system.service'
 
 interface MainPageProps {
   runtimeLabel: string
@@ -247,6 +249,8 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
         onRetryFailed={transfers.retryFailed}
         onClearFinished={transfers.clearFinished}
         onDismissNotice={transfers.dismissNotice}
+        platform={platform}
+        onReveal={(path) => void systemService.revealInFolder(path).catch((error: AppErrorPayload) => transfers.refuse(error.message))}
         onDismissRefusal={transfers.dismissRefusal}
       />
       <StatusBar left={activeLabel} right={runtimeLabel} />

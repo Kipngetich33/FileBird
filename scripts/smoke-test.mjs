@@ -218,6 +218,15 @@ async function launchApp() {
     return 'counting'
   })()`)
 
+  // Showing a file would open Finder over everything; record what was asked for.
+  await mainEval(`(() => {
+    const { shell } = process.mainModule.require('electron')
+    globalThis.__smokeRevealed = []
+    const original = shell.showItemInFolder.bind(shell)
+    shell.showItemInFolder = (path) => { globalThis.__smokeRevealed.push(path); return original === undefined ? undefined : undefined }
+    return true
+  })()`)
+
   // Native menus can't be driven over CDP: record each right-click menu Fly
   // pops up, and choose from it by label, as a person would.
   await mainEval(`(() => {
@@ -498,7 +507,7 @@ try {
         local: ['getDownloadFolder', 'getStartDirectory', 'listDirectory'],
         sftp: ['disconnect', 'forgetHostKey', 'listDirectory', 'onConnectionClosed', 'trustHostKeyAndConnect'],
         sshConfig: ['import', 'preview'],
-        system: ['getVersion'],
+        system: ['getVersion', 'revealInFolder'],
         terminals: ['acknowledge', 'close', 'onData', 'onExit', 'open', 'resize', 'setFocus', 'write'],
         transfers: ['cancel', 'cancelAll', 'clearFinished', 'list', 'onUpdate', 'retry', 'retryFailed', 'start']
       })
@@ -978,6 +987,19 @@ try {
     },
     downloaded && serverSha === localSha && !inPaneFolder && (await readdir(downloads)).every((name) => !name.includes('fly-part'))
   )
+  const showButton = `${jobRow('from-server.bin')} [data-testid="panel-show"]`
+  await app.waitFor(exists(showButton), 10000)
+  const showTitle = await app.js(`document.querySelector(${q(showButton)})?.title ?? ''`)
+  const showBox = await app.js(box(showButton))
+  await app.mouseClick(showBox.x + showBox.w / 2, showBox.y + showBox.h / 2)
+  await sleep(500)
+  const revealed = JSON.parse(await app.mainEval('JSON.stringify(globalThis.__smokeRevealed ?? [])'))
+  record(
+    'UI transfer: a finished transfer offers Show, which opens the file manager at the file itself',
+    { showTitle, revealed },
+    showTitle.startsWith('Show in Finder: ') && revealed.length === 1 && revealed[0] === join(scratch, 'downloads', 'from-server.bin')
+  )
+
   await app.evaluate(
     'UI transfer: the Download button says where it will put them',
     `document.querySelector(${q(`${REMOTE} [data-testid="download-button"]`)})?.title ?? ''`,

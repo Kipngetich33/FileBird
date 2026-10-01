@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type JSX } from 'react'
 import type { AppErrorPayload } from '@shared/types/errors'
 import type { TransferJob } from '@shared/types/transfers'
-import { jobDetail, jobFraction, statusLabel, type QueueSummary } from '@renderer/utils/transfer-format'
+import { jobDetail, jobFraction, localPathOf, revealLabel, statusLabel, type QueueSummary } from '@renderer/utils/transfer-format'
 
 type Filter = 'all' | 'active' | 'completed' | 'failed'
 
@@ -18,6 +18,10 @@ interface TransferPanelProps {
   refusal: AppErrorPayload | null
   onCancel: (id: string) => void
   onRetry: (id: string) => void
+  /** Shows a finished transfer's file on this computer. */
+  onReveal: (path: string) => void
+  /** This computer's platform, so the button says Finder, File Explorer or file manager. */
+  platform: string
   onCancelAll: () => void
   onRetryFailed: () => void
   onClearFinished: () => void
@@ -120,7 +124,7 @@ export function TransferPanel(props: TransferPanelProps): JSX.Element | null {
           </div>
           <ul aria-label="Transfer jobs" className="max-h-[24vh] overflow-y-auto pb-1">
             {visible.slice(0, ROW_LIMIT).map((job) => (
-              <JobRow key={job.id} job={job} onCancel={props.onCancel} onRetry={props.onRetry} />
+              <JobRow key={job.id} job={job} onCancel={props.onCancel} onRetry={props.onRetry} onReveal={props.onReveal} platform={props.platform} />
             ))}
             {visible.length === 0 && <li className="px-4 py-3 text-zinc-500">Nothing here.</li>}
             {visible.length > ROW_LIMIT && (
@@ -154,7 +158,19 @@ const TONE = {
   cancelled: 'text-zinc-500'
 } as const
 
-const JobRow = memo(function JobRow({ job, onCancel, onRetry }: { job: TransferJob; onCancel: (id: string) => void; onRetry: (id: string) => void }): JSX.Element {
+const JobRow = memo(function JobRow({
+  job,
+  onCancel,
+  onRetry,
+  onReveal,
+  platform
+}: {
+  job: TransferJob
+  onCancel: (id: string) => void
+  onRetry: (id: string) => void
+  onReveal: (path: string) => void
+  platform: string
+}): JSX.Element {
   const folder = job.relativePath.includes('/') ? job.relativePath.slice(0, job.relativePath.lastIndexOf('/')) : ''
   const active = job.status === 'queued' || job.status === 'running'
   const percent = Math.round(jobFraction(job) * 100)
@@ -199,6 +215,9 @@ const JobRow = memo(function JobRow({ job, onCancel, onRetry }: { job: TransferJ
           <PanelButton label="Cancel" onClick={() => onCancel(job.id)} />
         ) : job.status === 'failed' || job.status === 'cancelled' ? (
           <PanelButton label="Retry" onClick={() => onRetry(job.id)} />
+        ) : job.status === 'completed' ? (
+          // Where it went, the way a browser's downloads list shows you.
+          <PanelButton label="Show" title={`${revealLabel(platform)}: ${localPathOf(job)}`} onClick={() => onReveal(localPathOf(job))} />
         ) : null}
       </div>
     </li>
@@ -218,10 +237,12 @@ function MessageRow({ testId, tone, message, onDismiss }: { testId: string; tone
   )
 }
 
-function PanelButton({ label, onClick }: { label: string; onClick: () => void }): JSX.Element {
+function PanelButton({ label, title, onClick }: { label: string; title?: string; onClick: () => void }): JSX.Element {
   return (
     <button
       type="button"
+      {...(title === undefined ? {} : { title })}
+      data-testid={`panel-${label.toLowerCase()}`}
       onClick={onClick}
       className="shrink-0 rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-400 transition hover:border-white/20 hover:text-zinc-100"
     >

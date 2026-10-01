@@ -39,7 +39,9 @@ const api = {
     showContextMenu: (items: ContextMenuItem[]): Promise<ContextMenuAction | null> => ipcRenderer.invoke(IPC.APP_SHOW_CONTEXT_MENU, items)
   },
   system: {
-    getVersion: (): Promise<SystemVersions> => ipcRenderer.invoke(IPC.SYSTEM_GET_VERSION)
+    getVersion: (): Promise<SystemVersions> => ipcRenderer.invoke(IPC.SYSTEM_GET_VERSION),
+    /** Shows a file on this computer in Finder or the file manager. */
+    revealInFolder: (path: string): Promise<void> => ipcRenderer.invoke(IPC.SYSTEM_REVEAL_IN_FOLDER, path)
   },
   local: {
     /** The folder the local pane opens in. */
