@@ -1,40 +1,190 @@
 # FileBird
 
-A cross-platform desktop SFTP client — dual-pane file management over SSH, built
-with Electron, React and TypeScript.
+**A desktop SFTP client and SSH terminal in one window.** Two panes — your Mac on
+the left, your server on the right — so you can move files by dragging them, and
+run commands on the same connection without opening another app.
 
-Targets macOS (Apple Silicon first), Windows and Linux.
+Built with Electron, React and TypeScript. macOS, Windows and Linux.
+
+![FileBird with a local folder and a server side by side](screenshots/06-connected.png)
+
+---
+
+## What it does
+
+| | |
+|---|---|
+| **Files on both sides** | Browse your computer and your server at once, in two independent panes with their own history, selection and status line. |
+| **Transfers that behave** | Upload and download files and whole folders through a queue, with progress, speed, cancel and retry. Nothing is ever left half-written under a real filename. |
+| **A real terminal** | A shell on the server, over the connection you are already using — no second login — and a shell on your own machine. `sudo`, `vim` and `top` all work. |
+| **Drag and drop** | Between the panes to transfer; onto a folder in the same pane to move. |
+| **Search** | Narrow any folder to the names you are looking for, on either side. |
+| **Your keys stay yours** | Passwords and passphrases go to the system keychain, never to a file. Server keys are checked on every connection. |
+
+---
+
+## A tour
+
+### Saved connections
+
+Everything you connect to is listed, with the way you sign in. Connections can
+also be imported from your `~/.ssh/config`.
+
+![The remote pane listing saved connections](screenshots/02-saved-connections.png)
+
+### Adding a server
+
+A name, a host, a user, and either a password or a private key. Keys are read
+only when you connect, and FileBird tells you what it found in the file —
+including whether it needs a passphrase.
+
+![The new connection form](screenshots/03-new-connection.png)
+
+### Signing in
+
+Passwords and passphrases are asked for at connect time. Tick **Remember** and it
+goes to your login Keychain — only after the server has accepted it.
+
+![The password prompt](screenshots/04-password-prompt.png)
+
+### The server's identity, checked
+
+The first time you reach a server, its key is shown before anything is trusted.
+If a known server's key ever changes, FileBird refuses to connect and says so —
+there is no "connect anyway".
+
+![The host key prompt showing the server's fingerprint](screenshots/05-host-key.png)
+
+### Browsing
+
+Click a folder to open it. Back, up and refresh sit in each pane's toolbar, and a
+folder that takes a moment to open says so rather than looking stuck.
+
+![Both panes showing folders](screenshots/07-browsing.png)
+
+### Transferring
+
+Select what you want and press **Upload** or **Download**, or drag it to the
+other pane. Each file is its own job, three run at once, and finished transfers
+offer **Show** to open the file in Finder.
+
+![The transfers panel with completed downloads](screenshots/08-transfers.png)
+
+### The terminal
+
+Each pane has a **Terminal** tab (`Cmd/Ctrl+\``). The remote one opens a shell on
+the server over the connection that is already open; the local one opens a shell
+on your own machine. Both start in the folder the pane is showing.
+
+![A shell running on the server beside the file list](screenshots/09-terminal.png)
+
+### Searching a folder
+
+Press `Cmd/Ctrl+F` or click the magnifier, and the list narrows as you type.
+The footer keeps count.
+
+![Searching a folder in the local pane](screenshots/10-search.png)
+
+### Starting up
+
+![The FileBird start screen](screenshots/01-start-screen.png)
+
+---
+
+## Features in full
+
+**Connections**
+- Saved connections with password or private-key sign-in (`ed25519`, `rsa`, `ecdsa`).
+- Passwords and passphrases are stored in the OS keychain — Keychain on macOS,
+  Credential Manager on Windows, Secret Service on Linux — and only after the
+  server accepts them.
+- One-way import from `~/.ssh/config`, including `IdentityFile`. Hosts whose
+  settings FileBird can't honour are listed with a warning instead of failing later.
+- Host keys are trusted on first use, after you have seen the fingerprint. A
+  changed key is a hard stop.
+
+**Browsing**
+- Two panes, each with its own history; the divider is remembered between runs.
+- A click opens a folder; `Cmd`-click and `Shift`-click select several items.
+- Hidden files are shown, dimmed. Symlinks are marked, and a broken one is obvious.
+- Per-folder search (`Cmd/Ctrl+F`), on both sides.
+- Keyboard: arrows, `Enter` to open, `Backspace` for the parent, `F5` to refresh.
+
+**Transfers**
+- Upload and download files and whole folder trees.
+- A queue in the background: three files at a time, with progress, speed, cancel,
+  and retry that reconnects if the server dropped.
+- Conflicts are asked once for the whole batch: **Replace**, **Keep both** or **Skip**.
+- Safe writes: each file lands under a hidden temporary name, is size-checked,
+  then renamed into place, so an interrupted transfer never leaves a half-file
+  under the real name.
+- Downloads you didn't aim go to your **Downloads** folder; drag one to choose
+  where instead.
+
+**File management**
+- New folder, rename, and delete on both sides.
+- Local deletes go to the Trash (Recycle Bin on Windows). Remote deletes are
+  permanent, asked about first, and never follow symlinks.
+- Dragging onto a folder in the same pane **moves** items there — a rename, so
+  nothing is copied and nothing is overwritten.
+- Your home folder, its parents and the filesystem root are refused for delete,
+  rename and move.
+
+**Terminal**
+- A shell per pane, as a tab beside the files.
+- The remote shell is a second channel on the connection you already have: no
+  second login, no second password, no second host-key question.
+- A real pseudo-terminal, so interactive and full-screen programs work.
+- Output is throttled rather than allowed to flood the window, and nothing a
+  terminal shows is ever written to a log.
+
+**Keyboard**
+
+| | |
+|---|---|
+| `Cmd/Ctrl+1` / `Cmd/Ctrl+2` | Focus the local / remote pane |
+| `Cmd/Ctrl+R` | Refresh |
+| `Cmd+[` / `Alt+Left` | Back |
+| `Cmd+↑` / `Alt+Up` | Parent folder |
+| `Cmd/Ctrl+T` | Transfer the selection to the other side |
+| `Cmd/Ctrl+F` | Search this folder |
+| `Cmd/Ctrl+\`` | Switch between Files and Terminal |
+| `Cmd/Ctrl+Shift+N` | New folder |
+| `F2` | Rename |
+| `Delete` / `Cmd+Backspace` | Delete |
+| `Cmd/Ctrl+A` | Select all |
+
+---
 
 ## Installing
 
-Builds are produced locally with electron-builder (see [Packaging](#packaging)).
-They are **not signed with a developer certificate or notarised yet**, so each
-operating system warns the first time you open FileBird.
+Builds are made locally with electron-builder (see [Packaging](#packaging)). They
+are **not signed with a developer certificate or notarised**, so each operating
+system warns the first time you open FileBird.
 
 ### macOS
 
-FileBird needs macOS 13 (Ventura) or later. `FileBird-<version>-mac-universal.dmg` runs on
-both Apple Silicon and Intel; the `-arm64` / `-x64` DMGs are smaller single-CPU
-builds.
+FileBird needs macOS 13 (Ventura) or later. `FileBird-<version>-mac-universal.dmg`
+runs on both Apple Silicon and Intel; the `-arm64` / `-x64` DMGs are smaller
+single-CPU builds.
 
-1. Open the DMG and drag **FileBird** to **Applications**. The DMG window also
-   contains **How to install FileBird.txt** with these steps.
-2. Double-click FileBird. The first time, macOS says it could not verify FileBird: click
+1. Open the DMG and drag **FileBird** to **Applications**. The DMG also contains
+   **How to install FileBird.txt** with these steps.
+2. Double-click FileBird. The first time, macOS says it could not verify it: click
    **Done**.
 3. Open **System Settings → Privacy & Security**, scroll to **Security**, click
    **Open Anyway** next to FileBird, and confirm. This is needed only once.
    On macOS 14 or earlier, right-click FileBird → **Open** → **Open** does the same.
 4. If macOS says the app "is damaged", run
-   `xattr -dr com.apple.quarantine /Applications/FileBird.app` once. The builds are
-   ad-hoc signed only, not notarised.
-5. Saved passwords and passphrases go to your login Keychain, under **Fly**, the app's original name.
+   `xattr -dr com.apple.quarantine /Applications/FileBird.app` once.
+5. Saved passwords and passphrases go to your login Keychain, under **Fly**, the
+   app's original name.
 
 ### Windows
 
-Run `FileBird-<version>-win-x64-setup.exe`. SmartScreen warns about an unrecognised
-app: choose **More info → Run anyway**. Credentials are stored in Windows
-Credential Manager. *(Windows builds are cross-built on macOS and not yet
-tested on Windows.)*
+Run `FileBird-<version>-win-x64-setup.exe`. SmartScreen warns about an
+unrecognised app: choose **More info → Run anyway**. Credentials are stored in
+Windows Credential Manager. *(Cross-built on macOS and not yet tested on Windows.)*
 
 ### Linux
 
@@ -43,177 +193,103 @@ chmod +x FileBird-<version>-linux-x86_64.AppImage
 ./FileBird-<version>-linux-x86_64.AppImage
 ```
 
-Saving passwords needs a Secret Service provider (GNOME Keyring or KWallet)
-running. AppImages need FUSE (`libfuse2` on Ubuntu 22.04+). *(Linux builds are
-cross-built on macOS and not yet tested on Linux.)*
+Saving passwords needs a Secret Service provider (GNOME Keyring or KWallet).
+AppImages need FUSE (`libfuse2` on Ubuntu 22.04+). *(Cross-built on macOS and not
+yet tested on Linux.)*
 
-## Requirements
+---
 
-- **Node.js 22.12 or newer** (Electron's installer needs `require(esm)`).
-  Run `nvm use` to pick up the pinned version in `.nvmrc`.
+## Security
 
-## Getting started
+- The window that draws the UI has no access to your filesystem, to Node or to
+  the network. Everything it needs is requested through a small, hand-written
+  bridge, one named method at a time, and every argument is checked again on the
+  other side.
+- Secrets live in the OS keychain only. They never reach the app's settings file,
+  its log, or the part of the app that draws the screen.
+- Private keys are read in the background process, when connecting. The UI only
+  ever sees a summary: the type, the fingerprint, and whether it is encrypted.
+- Host keys are always verified; a changed key stops the connection.
+- Terminal output is never logged, because it routinely contains passwords and keys.
+- The shipped app loads only its own files, with a content-security policy, and
+  the Node features Electron offers are switched off in the build.
+- Nothing is sent anywhere: no telemetry, no update pings, no accounts.
+
+---
+
+## Building from source
+
+Requires **Node.js 22.12+** (`nvm use` picks the pinned version in `.nvmrc`).
 
 ```bash
-nvm use          # v24.14.1
+nvm use
 npm install
-npm run dev      # Electron + Vite with hot reload
+npm run dev        # Electron + Vite with hot reload
 ```
 
-### Test server
+### Scripts
 
-Integration and smoke tests run against OpenSSH in a throwaway container, bound
-to `127.0.0.1` only. On macOS this uses [Colima](https://colima.run):
-
-```bash
-brew install colima
-colima start fly --vm-type vz --cpu 2 --memory 2 --disk 20
-# plus the Docker CLI (e.g. the static binary from download.docker.com)
-```
-
-## Scripts
-
-| Command | Purpose |
+| Command | What it does |
 |---|---|
-| `npm run dev` | Development mode with hot reload |
-| `npm run build` | Typecheck, then build main / preload / renderer |
-| `npm run start` | Preview the production build |
-| `npm run typecheck` | Typecheck both TS projects |
+| `npm run dev` | Development build with hot reload |
+| `npm start` | Run the production build locally |
+| `npm run build` | Typecheck, then build main, preload and renderer |
 | `npm test` | Unit tests (Vitest) |
-| `npm run test:integration` | Tests against a real OpenSSH server in a container (needs Colima) |
-| `npm run smoke` | End-to-end check: launches the built app and drives it over CDP (needs Colima) |
-| `npm run test-server -- up` | Start a local OpenSSH server to try the app by hand (`status`, `down`) |
-| `npm run build:mac` | Package macOS `.dmg`s (arm64 + x64) |
-| `npm run build:win` | Package a Windows NSIS installer (x64) |
-| `npm run build:linux` | Package a Linux AppImage (x64) |
-| `npm run verify:package` | Check a packaged macOS app and run it against a test server |
+| `npm run test:integration` | Against a real OpenSSH server in a container |
+| `npm run smoke` | End-to-end checks driving the built app |
+| `npm run verify:package` | Checks a packaged build, including launching it |
+| `npm run screenshots` | Regenerates the pictures in this README |
+| `npm run test-server -- up` | A local SSH server to try the app against (`down` removes it) |
 
-## Packaging
+The integration, smoke and screenshot commands need Docker through Colima:
 
 ```bash
-npm run build:mac      # DMGs for Apple Silicon and Intel   → release/
-npm run build:mac:share  # one universal DMG (both CPUs) to share
-npm run build:win      # NSIS installer (x64)
-npm run build:linux    # AppImage (x64)
-npm run verify:package # checks a macOS build: signature, fuses, native modules,
-                       # then launches it against a test server (needs Colima)
+colima start fly
 ```
 
-- Each build script first fetches the keychain module's prebuilt binary for its
-  targets (`scripts/prepare-native.mjs`), so cross-builds carry the right one.
-- No native rebuild is needed: `ssh2` runs on pure JavaScript crypto under Electron.
-- Production hardening is applied at package time: Electron fuses (no
-  `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` or `--inspect`; asar integrity; app
-  loaded only from the asar) and a Content-Security-Policy.
-- macOS builds are **ad-hoc signed only**. Developer ID signing and notarisation
-  are not configured.
-- The icon is `resources/icon.svg`, rendered to `resources/icon.png` with
-  `env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron scripts/render-icon.cjs`.
+### Packaging
 
-## Architecture
-
-```text
-┌─────────────────────────────────────────────┐
-│               Electron Application          │
-│  ┌───────────────────────────────────────┐  │
-│  │   Renderer  —  React UI (sandboxed)   │  │
-│  └───────────────────┬───────────────────┘  │
-│                      │ contextBridge + IPC  │
-│  ┌───────────────────▼───────────────────┐  │
-│  │   Main  —  app logic, files, SSH/SFTP │  │
-│  └───────────────────┬───────────────────┘  │
-└──────────────────────┼──────────────────────┘
-                       ▼  SSH / SFTP
-              ┌─────────────────┐
-              │  Remote Server  │
-              └─────────────────┘
+```bash
+npm run build:mac      # DMGs (Apple Silicon + Intel) → release/
+npm run build:win      # NSIS installer
+npm run build:linux    # AppImage
 ```
 
-The renderer never touches Node, the filesystem, or credentials. It runs with
-`contextIsolation: true`, `nodeIntegration: false` and `sandbox: true`, and can
-only call the handful of functions explicitly bridged in
-[`src/preload/preload.ts`](src/preload/preload.ts).
+macOS builds are ad-hoc signed only — never with a developer identity — and are
+not notarised. Signing and publishing are deliberate, separate decisions.
 
-## Project structure
+---
 
-```text
-src/
-├── main/          Electron main process
-│   ├── main.ts        window creation, app lifecycle
-│   ├── security.ts    CSP, navigation guards
-│   ├── logger.ts      structured logging with credential redaction
-│   ├── ipc/           validated IPC handlers
-│   ├── services/      local files, connections, saved profiles, SSH config import
-│   ├── transfers/     uploads and downloads: progress, safe writes, conflicts
-│   ├── sftp/          SftpProvider abstraction, ssh2 implementation, host-key trust store
-│   ├── ssh/           private keys, ~/.ssh/config reading
-│   ├── secrets/       OS keychain access (the only place secrets are stored)
-│   └── storage/       connections.json and other app data files
-├── preload/       the contextBridge API surface
-├── renderer/      React application
-└── shared/        types and channel constants used by both sides
-test/support/      OpenSSH container helper for tests
+## How it is built
+
+```
+Renderer (React, sandboxed)  ──bridge + IPC──>  Main process (files, SSH, terminals)
 ```
 
-## Using the panes
+Everything that touches a disk, a network or a shell happens in the main
+process. The renderer asks; it never reaches out itself.
 
-Local files are on the left, the remote server on the right. One pane is active at
-a time (highlighted); menu commands act on it. Drag the divider to resize (or
-focus it and use ←/→; double-click resets) — the position is remembered.
+- **SSH/SFTP:** `ssh2`, behind an interface so the app isn't welded to one library.
+- **Terminal:** `xterm.js` in the window, a real pty (`node-pty`) or an SSH shell
+  channel behind it.
+- **Tests:** 452 unit tests, 67 integration tests against a real OpenSSH server,
+  140 end-to-end checks driving the built app, and 17 checks on the packaged app.
 
-| Keys (macOS; Ctrl/Alt on Windows and Linux) | Action |
-|---|---|
-| `Tab` / `Shift+Tab` from a file list | Switch pane |
-| `Cmd+1` / `Cmd+2` | Focus Local / Remote |
-| `↑` `↓` · `Enter` · `Backspace` | Select · Open · Parent folder |
-| `Cmd+R` or `F5` | Refresh the active pane |
-| `Cmd+[` · `Cmd+↑` | Back · Parent folder (Go menu) |
-| Click · `Cmd`-click · `Shift`-click · `Shift+↑/↓` · `Cmd+A` | Select · add or remove · select a range · select all |
-| `Cmd+T` | Transfer the active pane's selection to the other pane's folder |
-| `Cmd+Shift+N` · `F2` · `Delete` (`Cmd+Backspace` on macOS) | New folder · Rename · Delete the selection |
+---
 
-## Transferring files
+## Known limitations
 
-Select files and folders and press **Upload** (local pane), **Download** (remote
-pane) or `Cmd+T` — or **drag them onto the other pane** (onto a folder row to
-transfer into that folder). They go to the folder the other pane is showing, which refreshes
-as they arrive. Folders are copied with everything inside them.
+- Builds are unsigned and not notarised, so each OS warns once on first open.
+- Windows and Linux builds are cross-built on a Mac and have not been run there.
+- Moving files between two different disks on the same machine is refused (it
+  would need a copy); transfer it through the other pane instead.
+- One terminal per pane; no split view, and no searching the terminal's scrollback.
+- Transfer history is kept in memory, so it is forgotten when the app closes.
+- No SSH agent, `ProxyJump`, or FIDO keys yet. `~/.ssh/known_hosts` is not read;
+  FileBird keeps its own list of trusted keys.
 
-- **The Transfers panel** lists every file: Queued, Running (with progress and
-  speed), Completed, Failed or Cancelled. Three run at a time. Cancel or Retry any
-  of them, or use Cancel all / Retry failed / Clear finished.
-- **If names already exist**, FileBird asks once for the whole request: **Replace**
-  (folders are merged — files with the same name are replaced, nothing is
-  deleted), **Keep both** (saves `name (1).ext`), **Skip** or **Cancel**. A file
-  never replaces a folder.
-- **If the connection drops**, the unfinished files are marked Failed. Reconnect
-  and choose **Retry failed**.
-- Files are written under a hidden temporary name and renamed only once complete,
-  so a failed or cancelled transfer never leaves a half-written file behind.
-  Permissions and modification times are kept. Links to folders inside a folder
-  being transferred are skipped (and reported).
+---
 
-## Managing files
+## Licence
 
-Both panes can create folders (toolbar button or **File › New Folder**), rename
-(**F2**) and delete the selection (**Delete**, or **Cmd+Backspace** on macOS).
-
-- **Local deletes go to the Trash** (Recycle Bin on Windows), so they can be
-  restored. If the Trash isn't available, nothing is deleted.
-- **Remote deletes are permanent**, and FileBird asks first. Folders are deleted with
-  their contents; a link is removed as a link, never followed.
-- Renaming never replaces an existing item, and FileBird refuses to delete or rename
-  your home folder or any folder that contains it.
-
-## Security notes
-
-- **Host keys** are trusted on first use: FileBird shows the fingerprint before
-  connecting, remembers the key, and refuses to connect if it ever changes.
-- **Passwords and key passphrases** are stored only in the operating system's
-  keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service),
-  and only if you tick "Remember" and the server accepts them. Saved connections
-  (`connections.json`) contain no secrets.
-- **Private key files** are read by the main process when connecting; the UI
-  never receives key contents.
-- **Importing `~/.ssh/config`** asks first if your config contains `Match exec`,
-  because reading host settings with `ssh -G` runs those commands.
+MIT (see `package.json`). A `LICENSE` file has not been added yet.

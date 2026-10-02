@@ -27,6 +27,7 @@
     "build:linux": "npm run build && node scripts/prepare-native.mjs linux && electron-builder --linux",
     "build:unpack": "npm run build && electron-builder --dir",
     "smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/smoke-test.mjs",
+    "screenshots": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/screenshots.mjs",
     "test-server": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-server.mjs",
     "verify:package": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-package.mjs"
   },
