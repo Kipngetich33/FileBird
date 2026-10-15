@@ -16,8 +16,10 @@ export interface PaneHandle {
   selectAll: () => void
   /** Refreshes only if the pane is showing this folder, e.g. after a transfer into it. */
   refreshIfShowing: (path: string) => void
-  /** Switches the pane between its files and its terminal (Milestone 11). */
+  /** Switches the pane between its files and its last terminal, opening one if it has none. */
   toggleTerminal: () => void
+  /** Opens another terminal in this pane, up to its cap (user request, 2026-10-15). */
+  newTerminal: () => void
   /** Opens the pane's search box (Milestone 12). */
   search: () => void
   /** Scales what this pane shows: its listing, or its terminal's text. */

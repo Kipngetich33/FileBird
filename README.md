@@ -16,7 +16,7 @@ Built with Electron, React and TypeScript. macOS, Windows and Linux.
 |---|---|
 | **Files on both sides** | Browse your computer and your server at once, in two independent panes with their own history, selection and status line. |
 | **Transfers that behave** | Upload and download files and whole folders through a queue, with progress, speed, cancel and retry. Nothing is ever left half-written under a real filename. |
-| **A real terminal** | A shell on the server, over the connection you are already using — no second login — and a shell on your own machine. `sudo`, `vim` and `top` all work. |
+| **Real terminals** | Shells on the server, over the connection you are already using — no second login — and shells on your own machine, several per side as tabs. `sudo`, `vim` and `top` all work. |
 | **Drag and drop** | Between the panes to transfer; onto a folder in the same pane to move. |
 | **Search** | Narrow any folder to the names you are looking for, on either side. |
 | **Zoom per pane** | Make one side's text bigger without touching the other — the file list or the terminal. |
@@ -75,7 +75,8 @@ offer **Show** to open the file in Finder.
 
 Each pane has a **Terminal** tab (`Cmd/Ctrl+\``). The remote one opens a shell on
 the server over the connection that is already open; the local one opens a shell
-on your own machine. Both start in the folder the pane is showing.
+on your own machine. Both start in the folder the pane is showing, and **+** adds
+another terminal beside it.
 
 ![A shell running on the server beside the file list](screenshots/09-terminal.png)
 
@@ -135,7 +136,10 @@ The footer keeps count.
   rename and move.
 
 **Terminal**
-- A shell per pane, as a tab beside the files.
+- Shells as tabs beside the files — up to three per pane. **+** opens another,
+  **×** closes one, and `Cmd/Ctrl+Shift+T` opens one from the keyboard.
+- Each starts in the folder the pane is showing at the time, so a second
+  terminal can begin somewhere else, and each keeps its own scrollback.
 - The remote shell is a second channel on the connection you already have: no
   second login, no second password, no second host-key question.
 - A real pseudo-terminal, so interactive and full-screen programs work.
@@ -154,6 +158,7 @@ The footer keeps count.
 | `Cmd/Ctrl+T` | Transfer the selection to the other side |
 | `Cmd/Ctrl+F` | Search this folder |
 | `Cmd/Ctrl+\`` | Switch between Files and Terminal |
+| `Cmd/Ctrl+Shift+T` | New terminal in this pane |
 | `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Zoom this pane in / out (`Cmd/Ctrl+0` for actual size) |
 | `Cmd/Ctrl+Shift+N` | New folder |
 | `F2` | Rename |
@@ -289,7 +294,8 @@ process. The renderer asks; it never reaches out itself.
 - Windows and Linux builds are cross-built on a Mac and have not been run there.
 - Moving files between two different disks on the same machine is refused (it
   would need a copy); transfer it through the other pane instead.
-- One terminal per pane; no split view, and no searching the terminal's scrollback.
+- Three terminals per pane at most (a server allows only so many channels on one
+  connection); no split view, and no searching the terminal's scrollback.
 - Transfer history is kept in memory, so it is forgotten when the app closes.
 - No SSH agent, `ProxyJump`, or FIDO keys yet. `~/.ssh/known_hosts` is not read;
   FileBird keeps its own list of trusted keys.

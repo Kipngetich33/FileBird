@@ -84,6 +84,7 @@ export function RemotePane({ remote, active, onActivate, onSwitchPane, ref, onDo
       rename: () => connectedPaneRef.current?.rename(),
       deleteSelection: () => connectedPaneRef.current?.deleteSelection(),
       toggleTerminal: () => connectedPaneRef.current?.toggleTerminal(),
+      newTerminal: () => connectedPaneRef.current?.newTerminal(),
       search: () => connectedPaneRef.current?.search(),
       // Zoom scales the listing and the terminal, so there is nothing to zoom
       // until this pane is connected and showing one.

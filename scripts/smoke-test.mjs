@@ -366,8 +366,10 @@ async function launchApp() {
       }
     },
     /** Types into the terminal that has focus, as a person would, then Enter. */
+    // [data-showing] is the pane's visible terminal: a pane can have several, and
+    // a hidden one cannot take focus, so typing would go nowhere.
     async typeInTerminal(scope, line) {
-      await js(`document.querySelector(${q(`${scope} .xterm-helper-textarea`)})?.focus()`)
+      await js(`document.querySelector(${q(`${scope} [data-showing] .xterm-helper-textarea`)})?.focus()`)
       await send('Input.insertText', { text: line })
       await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
@@ -1771,7 +1773,9 @@ try {
 
   // ------------------------------------------------- M11: terminals in both panes ---
 
-  const terminalText = (scope) => `(document.querySelector(${q(`${scope} .xterm-rows`)})?.innerText ?? '')`
+  const terminalText = (scope) => `(document.querySelector(${q(`${scope} [data-showing] .xterm-rows`)})?.innerText ?? '')`
+  /** A particular terminal's text, whether or not it is the one on show. */
+  const terminalTextOf = (scope, key) => `(document.querySelector(${q(`${scope} [data-terminal="${key}"] .xterm-rows`)})?.innerText ?? '')`
   const tab = (scope, name) => `${scope} [data-testid="tab-${name}"]`
   const openTerminal = async (scope) => {
     const r = await app.js(box(tab(scope, 'terminal')))
@@ -1858,6 +1862,80 @@ try {
     'terminal: Files / Terminal switches back and forth, keeping the session, and restores the file keys',
     { backToFiles, restored, keptScrollback },
     backToFiles && restored.every((enabled) => enabled === true) && keptScrollback
+  )
+
+  // ------------------------------------------- terminals: more than one per pane ---
+
+  const terminalTabs = (scope) => `document.querySelectorAll(${q(`${scope} [data-testid="tab-terminal"]`)}).length`
+  const clickAt = async (selector) => {
+    const r = await app.js(box(selector))
+    await app.mouseClick(r.x + r.w / 2, r.y + r.h / 2)
+  }
+
+  record(
+    'menu: View offers New Terminal on Cmd/Ctrl+Shift+T',
+    byId['command:new-terminal'],
+    byId['command:new-terminal']?.accelerator === 'CmdOrCtrl+Shift+T' && byId['command:new-terminal']?.parent === 'View'
+  )
+
+  // A second terminal in the same pane: its own shell, and the first is left running.
+  await clickAt(`${LOCAL} [data-testid="tab-terminal-new"]`)
+  const twoTabs = await app.waitFor(`${terminalTabs(LOCAL)} === 2`, 10000)
+  await app.waitFor(`${terminalText(LOCAL)}.trim().length > 0`, 15000)
+  await app.typeInTerminal(LOCAL, 'echo FLY-SECOND-$((8*8))')
+  const secondRan = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-SECOND-64')`, 15000)
+  record(
+    'terminals: + opens another terminal in the same pane, with a shell of its own',
+    { twoTabs, secondRan, firstUntouched: await app.js(terminalTextOf(LOCAL, 'terminal-1') + `.includes('FLY-SECOND-64')`) },
+    twoTabs && secondRan && !(await app.js(terminalTextOf(LOCAL, 'terminal-1') + `.includes('FLY-SECOND-64')`))
+  )
+
+  await app.screenshot('terminal-tabs')
+
+  // A third from the menu, while a terminal has the keyboard; then the cap holds.
+  await app.clickMenu('command:new-terminal')
+  const threeTabs = await app.waitFor(`${terminalTabs(LOCAL)} === 3`, 10000)
+  const addDisabled = await app.js(`document.querySelector(${q(`${LOCAL} [data-testid="tab-terminal-new"]`)})?.disabled === true`)
+  await app.clickMenu('command:new-terminal')
+  await sleep(400)
+  record(
+    'terminals: New Terminal works from a terminal, and a pane stops at its cap',
+    { threeTabs, addDisabled, tabsNow: await app.js(terminalTabs(LOCAL)), said: await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`)) },
+    threeTabs && addDisabled && (await app.js(terminalTabs(LOCAL))) === 3 &&
+      (await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`))).includes('up to 3 terminals')
+  )
+
+  // Closing a tab ends that session only, and the one to its left takes over.
+  await clickAt(`${LOCAL} [data-testid="tab-terminal-close"][data-terminal="terminal-3"]`)
+  await clickAt(`${LOCAL} [data-testid="tab-terminal-close"][data-terminal="terminal-2"]`)
+  const oneLeft = await app.waitFor(`${terminalTabs(LOCAL)} === 1`, 10000)
+  await clickAt(`${LOCAL} [data-testid="tab-terminal"][data-terminal="terminal-1"]`)
+  const firstStillRunning = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`, 10000)
+  await app.typeInTerminal(LOCAL, 'echo FLY-FIRST-STILL-ALIVE')
+  const firstAnswers = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-FIRST-STILL-ALIVE')`, 15000)
+  record(
+    'terminals: closing a tab ends that shell only, and the first keeps its session and scrollback',
+    { oneLeft, firstStillRunning, firstAnswers, sessions: await app.js(`document.querySelectorAll(${q(`${LOCAL} [data-terminal] .xterm-rows`)}).length`) },
+    oneLeft && firstStillRunning && firstAnswers &&
+      (await app.js(`document.querySelectorAll(${q(`${LOCAL} [data-terminal] .xterm-rows`)}).length`)) === 1
+  )
+
+  // Closing a tab beside the one on show must leave the keyboard in that
+  // terminal, not on the file list hidden behind it. Nothing is focused here on
+  // purpose: the typing below only lands if the app put focus back itself.
+  await clickAt(`${LOCAL} [data-testid="tab-terminal-new"]`)
+  await app.waitFor(`${terminalTabs(LOCAL)} === 2`, 10000)
+  await clickAt(`${LOCAL} [data-testid="tab-terminal"][data-terminal="terminal-1"]`)
+  await app.waitFor(`document.querySelector(${q(`${LOCAL} [data-showing]`)})?.dataset.terminal === 'terminal-1'`, 5000)
+  await clickAt(`${LOCAL} [data-testid="tab-terminal-close"][data-terminal="terminal-4"]`)
+  const focusedAfterClose = await app.js(`(document.activeElement?.className ?? '')`)
+  await app.send('Input.insertText', { text: 'echo FLY-FOCUS-KEPT' })
+  await app.press('Enter', 'Enter', 13)
+  const typingLanded = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-FOCUS-KEPT')`, 15000)
+  record(
+    'terminals: closing a tab beside the one on show leaves the keyboard in that terminal',
+    { focusedAfterClose, typingLanded, tabs: await app.js(terminalTabs(LOCAL)) },
+    focusedAfterClose.includes('xterm-helper-textarea') && typingLanded && (await app.js(terminalTabs(LOCAL))) === 1
   )
 
   // The remote pane: a shell on the server, over the connection already open.

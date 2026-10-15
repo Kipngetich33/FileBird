@@ -20,6 +20,8 @@ import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type Dra
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
 import { safeLocalStorage } from '@renderer/utils/split'
 import { DEFAULT_ZOOM, readStoredZoom, stepZoom, storeZoom, terminalFontSize } from '@renderer/utils/zoom'
+import { afterClosing, canAddTerminal, terminalKey, type TerminalTab } from '@renderer/utils/terminal-tabs'
+import { MAX_TERMINALS_PER_PANE } from '@shared/constants/terminals'
 import { TerminalView } from '@renderer/components/Terminal/TerminalView'
 import { NameDialog } from './NameDialog'
 import { PaneSearch } from './PaneSearch'
@@ -120,13 +122,23 @@ export function FilePane({
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
   /**
-   * The terminal is created the first time it is asked for and then stays, so
-   * switching back to the files keeps the session and its scrollback. Its
-   * starting folder is frozen here: the shell has its own from then on, and
-   * following the file list would interrupt whatever is running.
+   * The pane's terminals (user request, 2026-10-15: more than one, as tabs).
+   * Each is created when it is asked for and then stays mounted, hidden, so
+   * switching away keeps its session and scrollback. Each freezes the folder it
+   * started in: the shell has its own from then on, and following the file list
+   * would interrupt whatever is running — which is also why a second terminal
+   * is useful, since it can start somewhere else.
    */
-  const [terminalCwd, setTerminalCwd] = useState<string | null>(null)
-  const [terminalStarted, setTerminalStarted] = useState(false)
+  const [terminals, setTerminals] = useState<TerminalTab[]>([])
+  const [activeTerminal, setActiveTerminal] = useState<string | null>(null)
+  // Read through refs, because opening and closing decide what to do from the
+  // current tabs; deciding inside a state updater may be deferred or repeated.
+  const terminalsRef = useRef(terminals)
+  terminalsRef.current = terminals
+  const activeTerminalRef = useRef(activeTerminal)
+  activeTerminalRef.current = activeTerminal
+  /** Only ever counts up, so a new tab can never reuse a closing one's key. */
+  const openedTerminals = useRef(0)
   const [operation, setOperation] = useState<Operation | null>(null)
   const [operationBusy, setOperationBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -264,26 +276,74 @@ export function FilePane({
     paneRef.current?.focus()
   }, [setSearch])
 
-  const showTerminal = useCallback(
-    (next: PaneTab) => {
-      if (terminal === undefined) return
-      if (next === 'terminal' && !terminalStarted) {
-        setTerminalCwd(listing?.path ?? null)
-        setTerminalStarted(true)
-      }
-      setTab(next)
-      if (next === 'files') paneRef.current?.focus()
-    },
-    [terminal, terminalStarted, listing]
-  )
+  const showFiles = useCallback(() => {
+    setTab('files')
+    paneRef.current?.focus()
+  }, [])
 
-  // A terminal on a connection that has gone away is closed with it.
+  /** Adds a terminal and shows it, starting it in the folder on show now. */
+  const openTerminal = useCallback(() => {
+    if (terminal === undefined) return
+    if (!canAddTerminal(terminalsRef.current)) {
+      setOperationMessage(`A pane runs up to ${MAX_TERMINALS_PER_PANE} terminals at a time.`)
+      return
+    }
+    openedTerminals.current += 1
+    const added = { key: terminalKey(openedTerminals.current), cwd: listing?.path ?? null }
+    setTerminals([...terminalsRef.current, added])
+    setActiveTerminal(added.key)
+    setTab('terminal')
+  }, [terminal, listing])
+
+  /** Shows a terminal that is already open. */
+  const showTerminal = useCallback((key: string) => {
+    setActiveTerminal(key)
+    setTab('terminal')
+  }, [])
+
+  /**
+   * Closes one terminal: unmounting its view ends that session and nothing else.
+   * The tab to its left takes over, and the files come back when it was the last.
+   */
+  const closeTerminal = useCallback((key: string) => {
+    const next = afterClosing(terminalsRef.current, key, activeTerminalRef.current)
+    setTerminals(next.tabs)
+    setActiveTerminal(next.active)
+    if (next.active === null) {
+      setTab('files')
+      paneRef.current?.focus()
+      return
+    }
+    // A terminal is still on show, so the keyboard belongs to it rather than to
+    // the list behind it. When the closed tab was the active one, the tab taking
+    // over focuses itself as it becomes visible; when it wasn't, the terminal on
+    // show is already in the page and focus is put back on it here, because the
+    // button that was clicked has just gone.
+    if (next.active === activeTerminalRef.current) {
+      paneRef.current?.querySelector<HTMLTextAreaElement>('[data-showing] .xterm-helper-textarea')?.focus()
+    }
+  }, [])
+
+  /** `Cmd/Ctrl+\``: out of a terminal to the files, or back to the last one — opening one if there is none. */
+  const toggleTerminal = useCallback(() => {
+    if (tab === 'terminal') {
+      showFiles()
+      return
+    }
+    const last = terminals[terminals.length - 1]
+    if (activeTerminal !== null && terminals.some((item) => item.key === activeTerminal)) showTerminal(activeTerminal)
+    else if (last !== undefined) showTerminal(last.key)
+    else openTerminal()
+  }, [tab, terminals, activeTerminal, showFiles, showTerminal, openTerminal])
+
+  // Terminals on a connection that has gone away are closed with it.
   useEffect(() => {
-    if (terminal === undefined && terminalStarted) {
-      setTerminalStarted(false)
+    if (terminal === undefined && terminals.length > 0) {
+      setTerminals([])
+      setActiveTerminal(null)
       setTab('files')
     }
-  }, [terminal, terminalStarted])
+  }, [terminal, terminals.length])
 
   const startNewFolder = useCallback(() => {
     if (operations === undefined || listing === null) return
@@ -360,7 +420,8 @@ export function FilePane({
       newFolder: startNewFolder,
       rename: startRename,
       deleteSelection: startDelete,
-      toggleTerminal: () => showTerminal(tab === 'terminal' ? 'files' : 'terminal'),
+      toggleTerminal,
+      newTerminal: openTerminal,
       search: startSearch,
       zoomIn: () => adjustZoom(1),
       zoomOut: () => adjustZoom(-1),
@@ -376,8 +437,8 @@ export function FilePane({
       startNewFolder,
       startRename,
       startDelete,
-      showTerminal,
-      tab,
+      toggleTerminal,
+      openTerminal,
       startSearch,
       adjustZoom,
       resetZoom
@@ -563,7 +624,18 @@ export function FilePane({
           dropDestination !== null ? 'border-sky-400 ring-2 ring-sky-400/40' : active ? 'border-sky-500/35' : 'border-white/[0.07]'
         }`}
       >
-        {terminal !== undefined && <PaneTabs active={tab} paneActive={active} onChange={showTerminal} />}
+        {terminal !== undefined && (
+          <PaneTabs
+            active={tab}
+            paneActive={active}
+            terminals={terminals}
+            activeTerminal={activeTerminal}
+            onShowFiles={showFiles}
+            onShowTerminal={showTerminal}
+            onNewTerminal={openTerminal}
+            onCloseTerminal={closeTerminal}
+          />
+        )}
 
         <PaneHeader
           title={title}
@@ -673,17 +745,29 @@ export function FilePane({
           )}
         </div>
 
-        {terminalStarted && terminal !== undefined && (
-          <div hidden={tab !== 'terminal'} className="flex min-h-0 flex-1 flex-col">
-            <TerminalView
-              side={terminal.side}
-              {...(terminal.connectionId === undefined ? {} : { connectionId: terminal.connectionId })}
-              cwd={terminalCwd}
-              visible={tab === 'terminal'}
-              fontSize={terminalFontSize(zoom)}
-            />
-          </div>
-        )}
+        {terminal !== undefined &&
+          terminals.map((item) => {
+            const showing = tab === 'terminal' && item.key === activeTerminal
+            return (
+              // Every terminal stays mounted: unmounting one would end its
+              // session, so only the one on show is visible.
+              <div
+                key={item.key}
+                hidden={!showing}
+                data-terminal={item.key}
+                data-showing={showing || undefined}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <TerminalView
+                  side={terminal.side}
+                  {...(terminal.connectionId === undefined ? {} : { connectionId: terminal.connectionId })}
+                  cwd={item.cwd}
+                  visible={showing}
+                  fontSize={terminalFontSize(zoom)}
+                />
+              </div>
+            )
+          })}
 
         {dropDestination !== null && (
           <div

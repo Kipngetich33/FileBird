@@ -11,6 +11,7 @@ export const MENU_COMMANDS = [
   'rename',
   'delete',
   'toggle-terminal',
+  'new-terminal',
   'find',
   'zoom-in',
   'zoom-out',

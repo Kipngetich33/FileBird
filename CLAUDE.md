@@ -443,9 +443,21 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   Upload/Download, New Folder, Rename…, Move to Trash…/Delete…, Refresh). The renderer
   sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
   validates the request and pops up `Menu`. Moving items is still not implemented.
-- **Terminals (M11):** one shell per pane, as tabs beside the files. The remote
-  shell is a channel on the live connection (`SftpProvider.openShell` → ssh2
-  `client.shell`), so no second login; closing it ends that channel only, never
+- **Terminals (M11, several per pane from 2026-10-15):** shells as tabs beside the
+  files, **up to `MAX_TERMINALS_PER_PANE` (3)** per pane
+  (`shared/constants/terminals.ts`) — "+" in the tab strip, "×" to close one, or
+  **New Terminal** (`CmdOrCtrl+Shift+T`, not suppressed in a terminal: that is where
+  it is reached for). `Cmd/Ctrl+\`` still toggles files ↔ the last terminal and opens
+  the first one. Each tab freezes the folder it started in, so a second terminal can
+  begin somewhere else, and **every terminal stays mounted (hidden)** — unmounting one
+  ends its session, so only the one on show is visible. Tab bookkeeping is pure
+  (`renderer/utils/terminal-tabs.ts`: closing hands over to the tab on the left, then
+  the right, then back to Files). The pane's wrapper carries `data-terminal` and
+  `data-showing`, because a hidden terminal can't take focus and its `innerText` is
+  empty — smoke's helpers address the one on show. The renderer's cap is a courtesy;
+  main's `MAX_SESSIONS`/`MAX_SESSIONS_PER_CONNECTION` remain the backstop.
+  The remote shells are channels on the live connection (`SftpProvider.openShell` → ssh2
+  `client.shell`), so no second login; closing one ends that channel only, never
   the connection. Terminals are capped (3 per connection, 8 in all) because a
   server allows ~10 channels and transfers use up to four. The local shell is
   `node-pty`, loaded lazily in a try/catch so a missing binary disables only the
