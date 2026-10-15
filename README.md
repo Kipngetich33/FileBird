@@ -19,6 +19,7 @@ Built with Electron, React and TypeScript. macOS, Windows and Linux.
 | **A real terminal** | A shell on the server, over the connection you are already using — no second login — and a shell on your own machine. `sudo`, `vim` and `top` all work. |
 | **Drag and drop** | Between the panes to transfer; onto a folder in the same pane to move. |
 | **Search** | Narrow any folder to the names you are looking for, on either side. |
+| **Zoom per pane** | Make one side's text bigger without touching the other — the file list or the terminal. |
 | **Your keys stay yours** | Passwords and passphrases go to the system keychain, never to a file. Server keys are checked on every connection. |
 
 ---
@@ -108,6 +109,9 @@ The footer keeps count.
 - A click opens a folder; `Cmd`-click and `Shift`-click select several items.
 - Hidden files are shown, dimmed. Symlinks are marked, and a broken one is obvious.
 - Per-folder search (`Cmd/Ctrl+F`), on both sides.
+- Each pane zooms on its own (`Cmd/Ctrl+=` and `Cmd/Ctrl+-`, `Cmd/Ctrl+0` to reset),
+  from 75% to 200%. The level is remembered, and shown in the footer while it
+  isn't 100% — click it to go back.
 - Keyboard: arrows, `Enter` to open, `Backspace` for the parent, `F5` to refresh.
 
 **Transfers**
@@ -135,6 +139,7 @@ The footer keeps count.
 - The remote shell is a second channel on the connection you already have: no
   second login, no second password, no second host-key question.
 - A real pseudo-terminal, so interactive and full-screen programs work.
+- Zooming the pane scales the shell's text, and the shell is told its new size.
 - Output is throttled rather than allowed to flood the window, and nothing a
   terminal shows is ever written to a log.
 
@@ -149,6 +154,7 @@ The footer keeps count.
 | `Cmd/Ctrl+T` | Transfer the selection to the other side |
 | `Cmd/Ctrl+F` | Search this folder |
 | `Cmd/Ctrl+\`` | Switch between Files and Terminal |
+| `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Zoom this pane in / out (`Cmd/Ctrl+0` for actual size) |
 | `Cmd/Ctrl+Shift+N` | New folder |
 | `F2` | Rename |
 | `Delete` / `Cmd+Backspace` | Delete |

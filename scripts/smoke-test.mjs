@@ -776,6 +776,34 @@ try {
   record('UI remote: a dropped connection returns to the list and says so', await app.js(alertIn(PANE)), lost && (await app.js(exists(profileRow('Smoke key')))))
   await app.evaluate('UI list: the saved passphrase is shown as saved', textOf(`${profileRow('Smoke key')} [data-testid="saved-secret"]`), (v) => v === 'passphrase saved')
 
+  // ------------------------------------------------------- zoom: one pane only ---
+
+  /** What React put on the listing, how tall a row really is, and what the footer says. */
+  const listZoom = (scope) => `(document.querySelector(${q(`${scope} [data-testid="file-list"]`)})?.style.zoom ?? '')`
+  const rowHeight = (scope) => `(document.querySelector(${q(`${scope} [role="row"][data-path]`)})?.getBoundingClientRect().height ?? 0)`
+  const zoomBadge = (scope) => textOf(`${scope} [data-testid="pane-zoom"]`)
+
+  record(
+    'zoom: View offers Zoom In, Zoom Out and Actual Size, on the +, - and 0 keys',
+    { in: byId['command:zoom-in'], out: byId['command:zoom-out'], reset: byId['command:zoom-reset'] },
+    byId['command:zoom-in']?.accelerator === 'CmdOrCtrl+=' &&
+      byId['command:zoom-out']?.accelerator === 'CmdOrCtrl+-' &&
+      byId['command:zoom-reset']?.accelerator === 'CmdOrCtrl+0' &&
+      ['command:zoom-in', 'command:zoom-out', 'command:zoom-reset'].every((id) => byId[id]?.parent === 'View')
+  )
+
+  await app.clickMenu('command:focus-local')
+  const plainRowHeight = await app.js(rowHeight(LOCAL))
+  await app.clickMenu('command:zoom-in')
+  await app.clickMenu('command:zoom-in')
+  const zoomedRowHeight = await app.js(rowHeight(LOCAL))
+  record(
+    'zoom: Zoom In really makes the rows bigger, and the footer offers the level back',
+    { plainRowHeight, zoomedRowHeight, style: await app.js(listZoom(LOCAL)), badge: await app.js(zoomBadge(LOCAL)) },
+    plainRowHeight > 0 && zoomedRowHeight / plainRowHeight > 1.25 && zoomedRowHeight / plainRowHeight < 1.35 &&
+      (await app.js(zoomBadge(LOCAL))) === '130%'
+  )
+
   // -------------------------------------------- restart: secrets persist in keychain ---
 
   record('restart: the app quits promptly when asked (before-quit cleanup does not hang)', '', await app.close())
@@ -791,6 +819,16 @@ try {
   }
   record('restart: the saved connection connects with no passphrase or host key prompt', { reconnected, sawPrompt }, reconnected && !sawPrompt)
   record('splitter: the position is remembered across a restart', await app.js(splitValue), (await app.js(splitValue)) === expectedSplit)
+
+  // A zoomed pane comes back zoomed. Nothing is clicked here: that would move
+  // focus, and the checks just below are about which pane connecting activates.
+  const zoomAfterRestart = await app.js(zoomBadge(LOCAL))
+  const restartedRowHeight = await app.js(rowHeight(LOCAL))
+  record(
+    'zoom: a pane is still zoomed after a restart',
+    { zoomAfterRestart, restartedRowHeight, plainRowHeight },
+    zoomAfterRestart === '130%' && restartedRowHeight / plainRowHeight > 1.25 && restartedRowHeight / plainRowHeight < 1.35
+  )
 
   // ------------------------------------------- M5: menu commands, active pane only ---
 
@@ -810,6 +848,16 @@ try {
   const localRefreshed = await app.waitFor(exists(rowFor(join(fixture, 'menu-refresh-local.txt'))))
   record('menu: after Focus Local, Refresh refreshes the local pane', '', localRefreshed)
   record('menu: no menu command reloaded the window', await app.js('window.__smokeMarker ?? null'), (await app.js('window.__smokeMarker ?? null')) === 'still here')
+
+  // The local pane is the active one here, and still zoomed from before the restart.
+  const badgeBox = await app.js(box(`${LOCAL} [data-testid="pane-zoom"]`))
+  await app.mouseClick(badgeBox.x + badgeBox.w / 2, badgeBox.y + badgeBox.h / 2)
+  const backToActualSize = await app.waitFor(`!${exists(`${LOCAL} [data-testid="pane-zoom"]`)}`, 5000)
+  record(
+    'zoom: the level in the footer puts a pane back to actual size',
+    { backToActualSize, rowNow: await app.js(rowHeight(LOCAL)), plainRowHeight },
+    backToActualSize && (await app.js(rowHeight(LOCAL))) === plainRowHeight
+  )
 
   const localPathBefore = await app.js(pathOf(LOCAL))
   await app.doubleClick(rowFor('/config/fixture'))
@@ -1681,6 +1729,46 @@ try {
     openedAlpha && searchClearedOnOpen && (await app.js(rowCount(REMOTE))) === remoteRowsBefore
   )
 
+  // ------------------------------------------- zoom: the keys, and one pane at a time ---
+
+  // The pane takes these keys itself (the shifted "+" can't be a second menu
+  // accelerator); over CDP no native accelerator fires, so this is that path.
+  await app.clickMenu('command:focus-local')
+  await app.press('+', 'Equal', 187, META | 8)
+  const firstStep = await app.js(zoomBadge(LOCAL))
+  await app.press('+', 'Equal', 187, META | 8)
+  const secondStep = await app.js(zoomBadge(LOCAL))
+  await app.press('-', 'Minus', 189, META)
+  const steppedBack = await app.js(zoomBadge(LOCAL))
+  record(
+    'zoom: Cmd with + and - steps the active pane in and out',
+    { firstStep, secondStep, steppedBack, style: await app.js(listZoom(LOCAL)) },
+    firstStep === '115%' && secondStep === '130%' && steppedBack === '115%'
+  )
+
+  // The other pane is untouched: this is a pane's zoom, not the window's.
+  await app.clickMenu('command:focus-remote')
+  await app.clickMenu('command:zoom-in')
+  const remembered = JSON.parse(await app.js(`window.localStorage.getItem('fly.zoom.v1')`))
+  record(
+    'zoom: each pane keeps its own level, and both are remembered',
+    { local: await app.js(zoomBadge(LOCAL)), remote: await app.js(zoomBadge(REMOTE)), remembered },
+    (await app.js(zoomBadge(LOCAL))) === '115%' && (await app.js(zoomBadge(REMOTE))) === '115%' &&
+      remembered.local === 1.15 && remembered.remote === 1.15 &&
+      (await app.js(rowHeight(REMOTE))) > plainRowHeight
+  )
+
+  // Back to actual size on both, so what follows measures unscaled rows.
+  await app.clickMenu('command:zoom-reset')
+  await app.clickMenu('command:focus-local')
+  await app.press('0', 'Digit0', 48, META)
+  record(
+    'zoom: Actual Size puts a pane back, and the footer stops offering a level',
+    { local: await app.js(listZoom(LOCAL)), remote: await app.js(listZoom(REMOTE)) },
+    (await app.waitFor(`!${exists(`${LOCAL} [data-testid="pane-zoom"]`)} && !${exists(`${REMOTE} [data-testid="pane-zoom"]`)}`, 5000)) &&
+      (await app.js(rowHeight(LOCAL))) === plainRowHeight
+  )
+
   // ------------------------------------------------- M11: terminals in both panes ---
 
   const terminalText = (scope) => `(document.querySelector(${q(`${scope} .xterm-rows`)})?.innerText ?? '')`
@@ -1705,12 +1793,15 @@ try {
   )
 
   // Full-screen programs need a real terminal; a plain pipe would say "not a tty".
-  await app.typeInTerminal(LOCAL, 'tty; echo TERM-IS-$TERM; echo SIZE-$(tput cols)')
+  // The width marker is built from a variable, so "SIZE-" appears in the output
+  // and never in the echoed command line, whatever width that line wraps at.
+  await app.typeInTerminal(LOCAL, 'tty; echo TERM-IS-$TERM; S=SIZE; echo ${S}-$(tput cols)')
   const isRealTty = await app.waitFor(`${terminalText(LOCAL)}.includes('TERM-IS-xterm-256color')`, 10000)
+  const reportedWidth = await app.js(`parseInt(${terminalText(LOCAL)}.split('SIZE-')[1] ?? '0', 10)`)
   record(
     'terminal: it is a real terminal, not a pipe (tty, $TERM and a width)',
     await app.js(`${terminalText(LOCAL)}.split(String.fromCharCode(10)).filter((line) => line.includes('/dev/tty') || line.includes('TERM-IS-') || line.includes('SIZE-')).join(' | ')`),
-    isRealTty && (await app.js(`${terminalText(LOCAL)}.includes('/dev/tty')`)) && (await app.js(`${terminalText(LOCAL)}.split('SIZE-')[1]?.trim().charCodeAt(0) >= 49`))
+    isRealTty && (await app.js(`${terminalText(LOCAL)}.includes('/dev/tty')`)) && reportedWidth > 0
   )
 
   // While a terminal has focus, the menu's file commands hand their keys over.
@@ -1718,13 +1809,40 @@ try {
     await app.mainEval(`JSON.stringify((() => {
       const menu = process.mainModule.require('electron').Menu.getApplicationMenu()
       const ids = ['refresh', 'select-all', 'go-back', 'go-up', 'transfer', 'new-folder', 'rename', 'delete']
-      return { files: ids.map((id) => menu.getMenuItemById('command:' + id)?.enabled), terminal: menu.getMenuItemById('command:toggle-terminal')?.enabled }
+      const zoom = ['zoom-in', 'zoom-out', 'zoom-reset']
+      return {
+        files: ids.map((id) => menu.getMenuItemById('command:' + id)?.enabled),
+        terminal: menu.getMenuItemById('command:toggle-terminal')?.enabled,
+        zoom: zoom.map((id) => menu.getMenuItemById('command:' + id)?.enabled)
+      }
     })())`)
   )
   record(
-    'terminal: while it has focus, keys that act on files are disabled, and Files / Terminal is not',
+    'terminal: while it has focus, keys that act on files are disabled, and Files / Terminal and zoom are not',
     suppressed,
-    suppressed.files.every((enabled) => enabled === false) && suppressed.terminal === true
+    suppressed.files.every((enabled) => enabled === false) && suppressed.terminal === true &&
+      suppressed.zoom.every((enabled) => enabled === true)
+  )
+
+  // Zooming a terminal makes its text bigger, which leaves room for fewer
+  // columns — and the shell is told, because that is what it draws against.
+  const cellHeight = `(document.querySelector(${q(`${LOCAL} .xterm-rows`)})?.firstElementChild?.getBoundingClientRect().height ?? 0)`
+  // The marker is built from a variable, so it appears in the output and not in the echoed command.
+  await app.typeInTerminal(LOCAL, 'W=W1; echo ${W}-$(tput cols)')
+  await app.waitFor(`${terminalText(LOCAL)}.includes('W1-')`, 10000)
+  const colsBefore = await app.js(`parseInt(${terminalText(LOCAL)}.split('W1-')[1] ?? '0', 10)`)
+  const cellBefore = await app.js(cellHeight)
+  await app.clickMenu('command:zoom-in')
+  await app.clickMenu('command:zoom-in')
+  const cellAfter = await app.js(cellHeight)
+  await app.typeInTerminal(LOCAL, 'W=W2; echo ${W}-$(tput cols)')
+  const toldTheShell = await app.waitFor(`${terminalText(LOCAL)}.includes('W2-')`, 10000)
+  const colsAfter = await app.js(`parseInt(${terminalText(LOCAL)}.split('W2-')[1] ?? '0', 10)`)
+  await app.clickMenu('command:zoom-reset')
+  record(
+    'terminal: zoom scales the shell text and tells the shell its new width',
+    { cellBefore, cellAfter, colsBefore, colsAfter, toldTheShell },
+    cellBefore > 0 && cellAfter > cellBefore && colsBefore > 0 && toldTheShell && colsAfter > 0 && colsAfter < colsBefore
   )
 
   // Back to the files, and the menu's keys come back with it.

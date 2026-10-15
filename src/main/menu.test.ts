@@ -62,9 +62,9 @@ describe('buildApplicationMenu', () => {
   })
 
   it.each([
-    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: undefined, 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }],
-    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }],
-    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F' }]
+    ['darwin', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Cmd+[', 'go-up': 'Cmd+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: undefined, 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F', 'zoom-in': 'CmdOrCtrl+=', 'zoom-out': 'CmdOrCtrl+-', 'zoom-reset': 'CmdOrCtrl+0' }],
+    ['win32', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F', 'zoom-in': 'CmdOrCtrl+=', 'zoom-out': 'CmdOrCtrl+-', 'zoom-reset': 'CmdOrCtrl+0' }],
+    ['linux', { refresh: 'CmdOrCtrl+R', 'focus-local': 'CmdOrCtrl+1', 'focus-remote': 'CmdOrCtrl+2', 'go-back': 'Alt+Left', 'go-up': 'Alt+Up', transfer: 'CmdOrCtrl+T', 'select-all': 'CmdOrCtrl+A', 'new-folder': 'CmdOrCtrl+Shift+N', rename: 'F2', delete: 'Delete', 'toggle-terminal': 'CmdOrCtrl+`', find: 'CmdOrCtrl+F', 'zoom-in': 'CmdOrCtrl+=', 'zoom-out': 'CmdOrCtrl+-', 'zoom-reset': 'CmdOrCtrl+0' }]
   ] as const)('uses platform-appropriate shortcuts on %s', (platform, expected) => {
     const template = buildApplicationMenu({ platform, isDev: false, send: () => undefined })
     const accelerators = Object.fromEntries(
@@ -80,7 +80,14 @@ describe('commands a focused terminal takes over', () => {
   it('covers every command that acts on files, and never the one that leaves the terminal', () => {
     // Anything that would act on files the user cannot see while typing in a shell.
     expect([...TERMINAL_SUPPRESSED_COMMANDS].sort()).toEqual(
-      [...MENU_COMMANDS].filter((command) => !['focus-local', 'focus-remote', 'toggle-terminal'].includes(command)).sort()
+      [...MENU_COMMANDS]
+        .filter(
+          (command) =>
+            // Switching panes and tabs is how the keyboard gets out of a shell,
+            // and zoom is wanted most of all inside one.
+            !['focus-local', 'focus-remote', 'toggle-terminal', 'zoom-in', 'zoom-out', 'zoom-reset'].includes(command)
+        )
+        .sort()
     )
   })
 })

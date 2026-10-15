@@ -19,6 +19,7 @@ Targets macOS (primary), Windows, Linux.
 | `docs/MILESTONE-9-PLAN.md` | M9 plan: drag and drop between panes, navigation hardening. |
 | `docs/MILESTONE-10-PLAN.md` | M10 plan: packaging — DMGs, Windows/Linux cross-builds, fuses, verification. |
 | `docs/MILESTONE-11-PLAN.md` | Latest milestone plan: terminals — a shell in each pane, flow control, node-pty packaging. |
+| `docs/APP-STORE.md` | Mac App Store assessment (2026-10-02): what Apple requires, the two sandbox blockers, and the decisions waiting on the user. |
 
 `docs/` is git-ignored on purpose — local planning only.
 
@@ -31,7 +32,8 @@ active pane (follows focus; Tab from a list switches), per-pane footers, and a
 real application menu (Refresh `Cmd+R`, Focus panes `Cmd+1/2`, Go Back `Cmd+[`,
 Parent `Cmd+↑`) that replaces Electron's default. Remote side: saved connections,
 password or key login, secrets in the OS keychain, `~/.ssh/config` import,
-host keys trusted on first use. Transfers (M6–M7): multi-select (Cmd/Shift-click,
+host keys trusted on first use. Each pane zooms on its own (`Cmd/Ctrl+=` / `-` / `0`),
+listing and terminal alike. Transfers (M6–M7): multi-select (Cmd/Shift-click,
 `Cmd+A`) files and folders, then Upload / Download / `Cmd+T`. A request is planned
 in main (conflicts asked once: Replace merges folders / Keep both / Skip), folders
 are created, and one job per file runs in a queue, 3 at a time, with safe writes
@@ -464,6 +466,20 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   (`useDirectory` filters before pruning), so nothing invisible can be
   transferred or deleted. Enter hands the list back the keyboard with the first
   match selected, Escape clears, and opening another folder empties the search.
+- **Each pane zooms on its own** (user request, 2026-10-15): `CmdOrCtrl+=` / `-` /
+  `0` under View act on the **active pane**, never the window (no `webFrame.setZoomLevel`,
+  which would scale both panes, the transfers panel and the chrome together). A fixed
+  ladder (75% → 200%, `renderer/utils/zoom.ts`) keeps repeated steps exactly on it, and
+  the level is remembered per side in `localStorage` (`fly.zoom.v1`), like the divider.
+  **The listing is scaled with CSS `zoom`** — which also narrows the pane's own container
+  query, so the Type column steps aside instead of the names being squeezed — while a
+  **terminal gets a bigger font instead** (`fontSize`, then `fit()`, so the shell learns
+  its new width; scaling its canvas would blur it). The toolbar, tabs and footer stay
+  put, so no control grows out of a narrow pane. The zoom commands are **not** in
+  `TERMINAL_SUPPRESSED_COMMANDS`: a shell is where bigger text is wanted most. A menu
+  item carries one accelerator only, so the pane's own `keydown` also takes the shifted
+  `+` and the keypad (`ZOOM_KEYS` in `FilePane`) — but **not `Ctrl+_`**, which is
+  readline's undo and belongs to the shell.
 - **A finished transfer offers "Show"** (user request, 2026-10-01), which opens
   Finder / File Explorer at that file (`shell.showItemInFolder`), as a browser's
   downloads list does. Main refuses a path that is no longer there; the button

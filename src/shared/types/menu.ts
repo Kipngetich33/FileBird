@@ -11,7 +11,10 @@ export const MENU_COMMANDS = [
   'rename',
   'delete',
   'toggle-terminal',
-  'find'
+  'find',
+  'zoom-in',
+  'zoom-out',
+  'zoom-reset'
 ] as const
 
 export type MenuCommand = (typeof MENU_COMMANDS)[number]

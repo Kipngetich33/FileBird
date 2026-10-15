@@ -163,6 +163,16 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
           case 'find':
             pane(activeRef.current)?.search()
             break
+          // Zoom is per pane, not per window: it acts on the active one.
+          case 'zoom-in':
+            pane(activeRef.current)?.zoomIn()
+            break
+          case 'zoom-out':
+            pane(activeRef.current)?.zoomOut()
+            break
+          case 'zoom-reset':
+            pane(activeRef.current)?.resetZoom()
+            break
           case 'new-folder':
           case 'rename':
           case 'delete': {

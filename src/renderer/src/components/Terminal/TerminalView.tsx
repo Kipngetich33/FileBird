@@ -48,6 +48,8 @@ export interface TerminalViewProps {
   cwd: string | null
   /** A hidden terminal keeps its session and scrollback; showing it again refits. */
   visible: boolean
+  /** Text size in pixels, from the pane's zoom level. Changing it refits and resizes the shell. */
+  fontSize: number
 }
 
 /**
@@ -55,13 +57,18 @@ export interface TerminalViewProps {
  * main process. Bytes travel both ways, because decoding halfway would break
  * any character split across two chunks.
  */
-export function TerminalView({ side, connectionId, cwd, visible }: TerminalViewProps): JSX.Element {
+export function TerminalView({ side, connectionId, cwd, visible, fontSize }: TerminalViewProps): JSX.Element {
   const holder = useRef<HTMLDivElement>(null)
+  // Read through a ref when the terminal is built: zooming must not be a reason
+  // to tear down the session and lose its scrollback.
+  const fontSizeRef = useRef(fontSize)
+  fontSizeRef.current = fontSize
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const refit = useRef<() => void>(() => undefined)
   const focus = useRef<() => void>(() => undefined)
+  const applyFontSize = useRef<(size: number) => void>(() => undefined)
 
   useEffect(() => {
     const container = holder.current
@@ -74,7 +81,7 @@ export function TerminalView({ side, connectionId, cwd, visible }: TerminalViewP
       scrollback: SCROLLBACK,
       cursorBlink: true,
       fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-      fontSize: 12,
+      fontSize: fontSizeRef.current,
       lineHeight: 1.15,
       theme: THEME
     })
@@ -103,6 +110,12 @@ export function TerminalView({ side, connectionId, cwd, visible }: TerminalViewP
     }
     refit.current = fitToBox
     focus.current = () => terminal.focus()
+    applyFontSize.current = (size) => {
+      if (terminal.options.fontSize === size) return
+      terminal.options.fontSize = size
+      // Bigger cells mean fewer of them: fitting tells the shell its new size.
+      fitToBox()
+    }
     fitToBox()
 
     const stopData = terminalsService.onData((event) => {
@@ -183,6 +196,10 @@ export function TerminalView({ side, connectionId, cwd, visible }: TerminalViewP
       terminal.dispose()
     }
   }, [side, connectionId, cwd, attempt])
+
+  useEffect(() => {
+    applyFontSize.current(fontSize)
+  }, [fontSize])
 
   useEffect(() => {
     if (!visible) return

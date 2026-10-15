@@ -20,6 +20,10 @@ export interface PaneHandle {
   toggleTerminal: () => void
   /** Opens the pane's search box (Milestone 12). */
   search: () => void
+  /** Scales what this pane shows: its listing, or its terminal's text. */
+  zoomIn: () => void
+  zoomOut: () => void
+  resetZoom: () => void
   /** File operations (Milestone 8); each opens its dialog, or does nothing if unavailable. */
   newFolder: () => void
   rename: () => void

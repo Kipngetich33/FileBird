@@ -18,6 +18,8 @@ import { appService } from '@renderer/services/app.service'
 import { fileContextMenu } from '@renderer/utils/context-menu'
 import { decodeDrag, dragSourceOf, dragType, encodeDrag, type DragSide, type DraggedEntry } from '@renderer/utils/drag'
 import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operations'
+import { safeLocalStorage } from '@renderer/utils/split'
+import { DEFAULT_ZOOM, readStoredZoom, stepZoom, storeZoom, terminalFontSize } from '@renderer/utils/zoom'
 import { TerminalView } from '@renderer/components/Terminal/TerminalView'
 import { NameDialog } from './NameDialog'
 import { PaneSearch } from './PaneSearch'
@@ -30,6 +32,13 @@ import type { PaneHandle, PaneOperations } from './pane'
 type Operation = { kind: 'new-folder' } | { kind: 'rename'; entry: FileEntry } | { kind: 'delete'; entries: FileEntry[] }
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
+
+/**
+ * Cmd/Ctrl with one of these zooms the pane: in, out, or back to actual size.
+ * `+` is the shifted form of `=`, which a menu accelerator can't also carry.
+ * Not `_`: Ctrl+_ is readline's undo, and a shell should keep it.
+ */
+const ZOOM_KEYS: Record<string, 1 | -1 | 0> = { '=': 1, '+': 1, '-': -1, '0': 0 }
 
 interface FilePaneProps {
   title: string
@@ -100,6 +109,16 @@ export function FilePane({
 
   const [searching, setSearching] = useState(false)
   const [tab, setTab] = useState<PaneTab>('files')
+  /**
+   * How much this pane's content is scaled (user request, 2026-10-15), each pane
+   * on its own and remembered between launches. The listing is scaled with CSS
+   * `zoom`, which also narrows it in its own container query, so the Type column
+   * steps aside at high zoom instead of squeezing the names. A terminal can't be
+   * scaled that way without blurring, so it gets a bigger font instead.
+   */
+  const [zoom, setZoom] = useState(() => readStoredZoom(safeLocalStorage(), side))
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
   /**
    * The terminal is created the first time it is asked for and then stays, so
    * switching back to the files keeps the session and its scrollback. Its
@@ -222,6 +241,17 @@ export function FilePane({
     }
   }
 
+  const applyZoom = useCallback(
+    (level: number) => {
+      setZoom(level)
+      storeZoom(safeLocalStorage(), side, level)
+    },
+    [side]
+  )
+  // Read through a ref, so a key held down steps from the level on screen.
+  const adjustZoom = useCallback((direction: 1 | -1) => applyZoom(stepZoom(zoomRef.current, direction)), [applyZoom])
+  const resetZoom = useCallback(() => applyZoom(DEFAULT_ZOOM), [applyZoom])
+
   /** Opens the search box, or focuses it when it is already open. */
   const startSearch = useCallback(() => {
     setTab('files')
@@ -331,9 +361,27 @@ export function FilePane({
       rename: startRename,
       deleteSelection: startDelete,
       toggleTerminal: () => showTerminal(tab === 'terminal' ? 'files' : 'terminal'),
-      search: startSearch
+      search: startSearch,
+      zoomIn: () => adjustZoom(1),
+      zoomOut: () => adjustZoom(-1),
+      resetZoom
     }),
-    [refresh, goBack, goUp, listing, selectedEntries, selectAll, startNewFolder, startRename, startDelete, showTerminal, tab, startSearch]
+    [
+      refresh,
+      goBack,
+      goUp,
+      listing,
+      selectedEntries,
+      selectAll,
+      startNewFolder,
+      startRename,
+      startDelete,
+      showTerminal,
+      tab,
+      startSearch,
+      adjustZoom,
+      resetZoom
+    ]
   )
 
   // Keep the selected row in view as the keyboard moves it.
@@ -401,6 +449,19 @@ export function FilePane({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    // Zoom first, because it applies to whatever the pane is showing — a shell
+    // included. The menu owns the plain "=", "-" and "0"; these are the shifted
+    // and keypad forms of the same keys, which a menu item can't also carry.
+    if (event.metaKey || event.ctrlKey) {
+      const direction = ZOOM_KEYS[event.key]
+      if (direction !== undefined) {
+        event.preventDefault()
+        if (direction === 0) resetZoom()
+        else adjustZoom(direction)
+        return
+      }
+    }
+
     // Keys typed in the terminal belong to the shell, including Tab and Backspace.
     if (tab === 'terminal') return
 
@@ -584,6 +645,7 @@ export function FilePane({
           ref={scrollRef}
           data-testid="file-list"
           hidden={tab === 'terminal'}
+          style={{ zoom }}
           className="min-h-0 flex-1 overflow-y-auto"
           onContextMenu={(event) => {
             // A row's own menu has already been handled.
@@ -618,6 +680,7 @@ export function FilePane({
               {...(terminal.connectionId === undefined ? {} : { connectionId: terminal.connectionId })}
               cwd={terminalCwd}
               visible={tab === 'terminal'}
+              fontSize={terminalFontSize(zoom)}
             />
           </div>
         )}
@@ -631,7 +694,13 @@ export function FilePane({
           </div>
         )}
 
-        <PaneFooter count={listing === null ? null : entries.length} total={totalCount} selected={selectedEntries} />
+        <PaneFooter
+          count={listing === null ? null : entries.length}
+          total={totalCount}
+          selected={selectedEntries}
+          zoom={zoom}
+          onResetZoom={resetZoom}
+        />
       </section>
 
       {/* Outside the section, so keys typed in a dialog never reach the list's shortcuts. */}

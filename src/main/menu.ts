@@ -94,6 +94,14 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
         command('toggle-terminal', 'Files / Terminal', 'CmdOrCtrl+`'),
         command('find', 'Search This Folder', 'CmdOrCtrl+F'),
         { type: 'separator' },
+        // Zoom acts on the active pane, not the window, and is deliberately not
+        // suppressed while a terminal has focus: a shell is exactly where
+        // someone needs bigger text. A menu item carries one accelerator only,
+        // so the shifted "+" and the numeric keypad are handled in the pane.
+        command('zoom-in', 'Zoom In', 'CmdOrCtrl+='),
+        command('zoom-out', 'Zoom Out', 'CmdOrCtrl+-'),
+        command('zoom-reset', 'Actual Size', 'CmdOrCtrl+0'),
+        { type: 'separator' },
         { role: 'togglefullscreen' }
       ]
     },
