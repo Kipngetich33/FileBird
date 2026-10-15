@@ -1,6 +1,6 @@
 {
   "name": "fly",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "FileBird — a cross-platform desktop SFTP client",
   "desktopName": "fly.desktop",
   "main": "./out/main/main.js",
