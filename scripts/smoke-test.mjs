@@ -1886,7 +1886,7 @@ try {
   }
 
   record(
-    'menu: View offers New Terminal on Cmd/Ctrl+Shift+T',
+    'menu: View offers Add Tab on Cmd/Ctrl+Shift+T',
     byId['command:new-terminal'],
     byId['command:new-terminal']?.accelerator === 'CmdOrCtrl+Shift+T' && byId['command:new-terminal']?.parent === 'View'
   )
@@ -1923,7 +1923,7 @@ try {
   await app.clickMenu('command:new-terminal')
   await sleep(400)
   record(
-    'terminals: New Terminal works from a terminal, and a pane stops at its cap of shells',
+    'terminals: Add Tab works from a terminal, and a pane stops at its cap of shells',
     {
       threeTabs,
       filled,
@@ -2049,13 +2049,13 @@ try {
   // Right-clicking inside a terminal offers the same splits (user request, 2026-10-20).
   // Native menus can't be driven, so smoke records the labels and picks one.
   const beforeMenuPanes = (await app.js(panesIn(LOCAL))).length
-  const terminalMenu = await app.contextMenu(`${LOCAL} [data-showing] [data-pane="${firstPane}"]`, 'Split Down', { centre: true })
+  const terminalMenu = await app.contextMenu(`${LOCAL} [data-showing] [data-pane="${firstPane}"]`, 'Split Vertically', { centre: true })
   const splitFromMenu = await app.waitFor(`${panesIn(LOCAL)}.length === ${beforeMenuPanes + 1}`, 10000)
   record(
     'terminals: right-clicking a terminal offers the splits, and acts on that pane',
     { menu: terminalMenu, beforeMenuPanes, after: await app.js(panesIn(LOCAL)), splitFromMenu },
     // The stub records each item as a label, with a separator as "—".
-    splitFromMenu && (terminalMenu ?? []).join(' | ') === 'Split Right | Split Down | — | New Terminal | Close This Split'
+    splitFromMenu && (terminalMenu ?? []).join(' | ') === 'Split Horizontally | Split Vertically | — | Add Tab | Close This Split'
   )
 
   // Closing the extra halves leaves the first shell, still running, with the keyboard.

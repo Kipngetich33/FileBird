@@ -94,10 +94,13 @@ export function buildApplicationMenu({ platform, isDev, send }: ApplicationMenuO
         command('toggle-terminal', 'Files / Terminal', 'CmdOrCtrl+`'),
         // Another terminal in the same pane. Cmd/Ctrl+T is already Transfer, and
         // this is not suppressed in a terminal: that is where it is reached for.
-        command('new-terminal', 'New Terminal', 'CmdOrCtrl+Shift+T'),
-        // Dividing the terminal the keyboard is in, as macOS Terminal and iTerm do.
-        command('split-terminal-right', 'Split Terminal Right', 'CmdOrCtrl+D'),
-        command('split-terminal-down', 'Split Terminal Down', 'CmdOrCtrl+Shift+D'),
+        command('new-terminal', 'Add Tab', 'CmdOrCtrl+Shift+T'),
+        // Dividing the terminal the keyboard is in. The ids stay "right" and
+        // "down" because that is unambiguous; the labels are the words people
+        // use (user request, 2026-10-20), where "horizontally" means the panes
+        // sit side by side and "vertically" means one above the other.
+        command('split-terminal-right', 'Split Horizontally', 'CmdOrCtrl+D'),
+        command('split-terminal-down', 'Split Vertically', 'CmdOrCtrl+Shift+D'),
         command('find', 'Search This Folder', 'CmdOrCtrl+F'),
         { type: 'separator' },
         // Zoom acts on the active pane, not the window, and is deliberately not

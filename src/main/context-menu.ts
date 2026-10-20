@@ -32,14 +32,16 @@ export function contextMenuLabel(action: ContextMenuAction, platform: NodeJS.Pla
       return 'Delete…'
     case 'refresh':
       return 'Refresh'
+    // Side by side and one above the other (user request, 2026-10-20). The
+    // action ids stay directional, which cannot be read two ways.
     case 'split-right':
-      return 'Split Right'
+      return 'Split Horizontally'
     case 'split-down':
-      return 'Split Down'
+      return 'Split Vertically'
     case 'close-split':
       return 'Close This Split'
     case 'new-terminal':
-      return 'New Terminal'
+      return 'Add Tab'
   }
 }
 

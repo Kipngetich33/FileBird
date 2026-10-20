@@ -136,13 +136,14 @@ The footer keeps count.
   rename and move.
 
 **Terminal**
-- Shells as tabs beside the files. **+** opens another, **×** closes one, and
-  `Cmd/Ctrl+Shift+T` opens one from the keyboard.
-- **Split a terminal** side by side (`Cmd/Ctrl+D`) or one above the other
-  (`Cmd/Ctrl+Shift+D`), as macOS Terminal does, and drag the divider between
-  them. Splits can be split again, and **×** on a half closes just that shell.
-- Right-click inside a terminal for the same choices — Split Right, Split Down,
-  New Terminal, Close This Split — acting on the half you clicked in.
+- Shells as tabs beside the files. **+** adds a tab, **×** closes one, and
+  `Cmd/Ctrl+Shift+T` (**Add Tab**) does it from the keyboard.
+- **Split a terminal**: **Split Horizontally** (`Cmd/Ctrl+D`) puts the two halves
+  side by side, **Split Vertically** (`Cmd/Ctrl+Shift+D`) one above the other, and
+  the divider between them drags. Splits can be split again, and **×** on a half
+  closes just that shell.
+- Right-click inside a terminal for the same choices — Split Horizontally, Split
+  Vertically, Add Tab, Close This Split — acting on the half you clicked in.
 - A pane runs up to eight shells locally and four on a server, counting tabs and
   splits together — a server allows only so many channels on one connection.
 - Each starts in the folder the pane is showing at the time, so a second
@@ -165,8 +166,8 @@ The footer keeps count.
 | `Cmd/Ctrl+T` | Transfer the selection to the other side |
 | `Cmd/Ctrl+F` | Search this folder |
 | `Cmd/Ctrl+\`` | Switch between Files and Terminal |
-| `Cmd/Ctrl+Shift+T` | New terminal in this pane |
-| `Cmd/Ctrl+D` / `Cmd/Ctrl+Shift+D` | Split the terminal right / down |
+| `Cmd/Ctrl+Shift+T` | Add a terminal tab to this pane |
+| `Cmd/Ctrl+D` / `Cmd/Ctrl+Shift+D` | Split the terminal horizontally / vertically |
 | `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Zoom this pane in / out (`Cmd/Ctrl+0` for actual size) |
 | `Cmd/Ctrl+Shift+N` | New folder |
 | `F2` | Rename |

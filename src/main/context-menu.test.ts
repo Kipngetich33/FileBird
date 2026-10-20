@@ -91,13 +91,13 @@ describe('buildContextMenu', () => {
       (action) => chosen.push(action)
     )
     expect(template.map((item) => item.label ?? item.type)).toEqual([
-      'Split Right',
-      'Split Down',
+      'Split Horizontally',
+      'Split Vertically',
       'separator',
-      'New Terminal',
+      'Add Tab',
       'Close This Split'
     ])
-    expect(template.find((item) => item.label === 'New Terminal')?.enabled).toBe(false)
+    expect(template.find((item) => item.label === 'Add Tab')?.enabled).toBe(false)
   })
 
   it('names the Recycle Bin on Windows', () => {

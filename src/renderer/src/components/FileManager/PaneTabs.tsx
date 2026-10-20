@@ -106,8 +106,8 @@ export function PaneTabs({
         type="button"
         hidden={terminals.length === 0}
         disabled={!canAdd}
-        aria-label="New terminal"
-        title={canAdd ? 'New terminal' : `A pane runs up to ${cap} terminals, counting splits`}
+        aria-label="Add tab"
+        title={canAdd ? 'Add tab' : `A pane runs up to ${cap} terminals, counting splits`}
         data-testid="tab-terminal-new"
         onClick={onNewTerminal}
         className="-mb-px border-b border-transparent px-2 text-[12px] leading-none text-zinc-600 transition hover:text-zinc-200 disabled:text-zinc-700 disabled:hover:text-zinc-700"

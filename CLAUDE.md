@@ -461,7 +461,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
   validates the request and pops up `Menu`. Moving items is still not implemented.
   **A terminal has its own right-click menu** (user request, 2026-10-20) through the
-  same pipeline — Split Right, Split Down, New Terminal, Close This Split — and it
+  same pipeline — Split Horizontally, Split Vertically, Add Tab, Close This Split — and it
   acts on **the pane under the pointer**, which is why `splitPaneFrom(paneKey, …)`
   takes a named pane and the menu command is the one that looks up the focused one.
 - **Terminals (M11; several per pane from 2026-10-15; splits from 2026-10-19):**
@@ -479,8 +479,12 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   `MAX_SESSIONS_PER_CONNECTION` 4). **`data-pane` marks where a shell lives and is
   what counts them** — the close button deliberately uses `data-close-pane`, since
   it once doubled every pane in the count. "+" in the tab strip, "×" to close one, or
-  **New Terminal** (`CmdOrCtrl+Shift+T`, not suppressed in a terminal: that is where
-  it is reached for). `Cmd/Ctrl+\`` still toggles files ↔ the last terminal and opens
+  **Add Tab** (`CmdOrCtrl+Shift+T`, not suppressed in a terminal: that is where it is
+  reached for). **Labels and ids differ on purpose** (user request, 2026-10-20):
+  people asked for "Split Horizontally" (side by side) and "Split Vertically" (one
+  above the other), but those words are read oppositely by iTerm and tmux, so the
+  ids stay `split-right`/`split-down` and the directions stay `row`/`column`. Main
+  owns the labels, which is the layer where the friendly words belong. `Cmd/Ctrl+\`` still toggles files ↔ the last terminal and opens
   the first one. Each tab freezes the folder it started in, so a second terminal can
   begin somewhere else, and **every terminal stays mounted (hidden)** — unmounting one
   ends its session, so only the one on show is visible. Tab bookkeeping is pure
