@@ -15,6 +15,8 @@ import { startSftpServer } from '../test/support/sftp-container.ts'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SHOTS = join(ROOT, 'screenshots')
 const PORT = 9420
+/** The main process's own inspector: menu commands can only be clicked from there. */
+const INSPECT = 9421
 const WIDTH = 1280
 const HEIGHT = 820
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -56,8 +58,9 @@ await server.exec(
     'printf "<!doctype html>" > /config/www/index.html',
     'head -c 180000 /dev/urandom > /config/www/assets/app.js',
     'head -c 40000 /dev/urandom > /config/www/assets/styles.css',
-    'head -c 900000 /dev/urandom > /config/logs/access.log',
-    'head -c 120000 /dev/urandom > /config/logs/error.log',
+    // Readable lines, not random bytes: these end up on screen in the terminal shots.
+    'i=1; while [ $i -le 4000 ]; do echo "10.0.2.$((i%250)) - - [20/Oct/2026:09:$((i%60)):12 +0000] \\"GET /assets/app.js HTTP/1.1\\" 200 184320"; i=$((i+1)); done > /config/logs/access.log',
+    'printf "%s\\n" "[error] 2026/10/20 09:14:02 upstream timed out (110: Operation timed out) while reading response header" "[warn] 2026/10/20 09:14:03 upstream server temporarily disabled while reading response header" "[error] 2026/10/20 09:15:41 open() \\"/config/www/favicon.ico\\" failed (2: No such file or directory)" > /config/logs/error.log',
     'head -c 3000000 /dev/urandom > /config/releases/build-184.tar.gz',
     'chown -R 1000:1000 /config/www /config/logs /config/releases'
   ].join(' && ')
@@ -69,7 +72,7 @@ await rm(SHOTS, { recursive: true, force: true })
 await mkdir(SHOTS, { recursive: true })
 
 const { ELECTRON_RUN_AS_NODE, ELECTRON_NO_ATTACH_CONSOLE, ...inherited } = process.env
-const child = spawn(join(ROOT, 'node_modules/.bin/electron'), [ROOT, `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
+const child = spawn(join(ROOT, 'node_modules/.bin/electron'), [`--inspect=${INSPECT}`, ROOT, `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
   env: { ...inherited, FLY_DEV_HOME: home, FLY_DEV_DOWNLOADS: join(home, 'Downloads') },
   stdio: 'ignore'
 })
@@ -151,6 +154,69 @@ const type = async (selector, text) => {
   await send('Input.insertText', { text })
 }
 
+/** Clicks an application menu item by id, exactly as choosing it from the menu bar would. */
+const mainSocket = await (async () => {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${INSPECT}/json/list`)).json()
+      const url = targets[0]?.webSocketDebuggerUrl
+      if (url) {
+        const socket = new WebSocket(url)
+        await new Promise((resolve) => socket.addEventListener('open', resolve))
+        return socket
+      }
+    } catch {}
+    await sleep(250)
+  }
+  throw new Error('no main-process inspector')
+})()
+let mainId = 0
+const mainPending = new Map()
+mainSocket.addEventListener('message', (event) => {
+  const message = JSON.parse(event.data)
+  if (message.id && mainPending.has(message.id)) {
+    mainPending.get(message.id)(message)
+    mainPending.delete(message.id)
+  }
+})
+const mainEval = (expression) =>
+  new Promise((resolve) => {
+    const n = ++mainId
+    mainPending.set(n, (message) => resolve(message.result?.result?.value))
+    mainSocket.send(JSON.stringify({ id: n, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }))
+  })
+const clickMenu = async (id) => {
+  const result = await mainEval(`(() => { const item = process.mainModule.require('electron').Menu.getApplicationMenu().getMenuItemById(${q(id)}); if (!item) return 'missing'; item.click(); return 'clicked' })()`)
+  if (result !== 'clicked') throw new Error(`menu item ${id}: ${result}`)
+  await sleep(400)
+}
+
+// A real drag, intercepted so its data is known, then hovered over the target.
+let dragged = null
+app.socket.addEventListener('message', (event) => {
+  const message = JSON.parse(event.data)
+  if (message.method === 'Input.dragIntercepted') dragged = message.params.data
+})
+const boxOf = (selector) =>
+  js(`(() => { const el = document.querySelector(${q(selector)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
+const dragOver = async (fromSelector, toSelector) => {
+  const from = await boxOf(fromSelector)
+  const to = await boxOf(toSelector)
+  if (from === null || to === null) throw new Error('nothing to drag')
+  dragged = null
+  await send('Input.setInterceptDrags', { enabled: true })
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1 })
+  for (const step of [6, 14, 26, 40]) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + step, y: from.y + step / 2, button: 'left', buttons: 1 })
+    if (dragged !== null) break
+    await sleep(120)
+  }
+  for (let attempt = 0; attempt < 40 && dragged === null; attempt += 1) await sleep(100)
+  if (dragged === null) throw new Error('the drag was not intercepted')
+  for (const type of ['dragEnter', 'dragOver']) await send('Input.dispatchDragEvent', { type, x: to.x, y: to.y, data: dragged })
+  return { to, drop: () => send('Input.dispatchDragEvent', { type: 'drop', x: to.x, y: to.y, data: dragged }) }
+}
+
 const LOCAL = '[aria-label="Local files"]'
 const REMOTE = '[aria-label="Remote files"]'
 const PANE = '[aria-label="Remote connection"]'
@@ -186,26 +252,36 @@ await clickSelector(`${REMOTE} [role="row"][data-path="/config/www"]`)
 await waitFor(`document.querySelector(${q(`${REMOTE} [data-testid="pane-path"]`)}).textContent === '/config/www'`)
 await shot('07-browsing')
 
-// A transfer: download the whole folder's assets.
-await clickSelector(`${REMOTE} [role="row"][data-path="/config/www/assets"]`)
-await waitFor(`document.querySelector(${q(`${REMOTE} [data-testid="pane-path"]`)}).textContent === '/config/www/assets'`)
-await js(`[...document.querySelectorAll(${q(`${REMOTE} [role="row"][data-path]`)})].forEach((row, index) => { if (index === 0) row.click() })`)
-await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4 })
-await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4 })
-await clickText(REMOTE, 'Download')
-await sleep(1_200)
-await shot('08-transfers')
+// Dragging a folder from the server onto this computer: caught mid-drag, with
+// the label that says where it would land.
+const drag = await dragOver(`${REMOTE} [role="row"][data-path="/config/www/assets"]`, `${LOCAL} [role="row"][data-path$="website"]`)
+await sleep(400)
+await shot('08-drag-and-drop')
+await drag.drop()
+await sleep(1_500)
+await shot('09-transfers')
 
 // The terminal, on the server, over the same connection.
 await clickSelector(`${REMOTE} [data-testid="tab-terminal"]`)
 await waitFor(`!!document.querySelector(${q(`${REMOTE} .xterm-rows`)})`, 20_000)
 await sleep(1_500)
-await js(`document.querySelector(${q(`${REMOTE} .xterm-helper-textarea`)})?.focus()`)
-await send('Input.insertText', { text: 'uname -a; df -h /config | tail -1; ls -la' })
-await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
-await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+const typeInTerminal = async (scope, line) => {
+  await js(`document.querySelector(${q(`${scope} [data-showing] .xterm-helper-textarea`)})?.focus()`)
+  await send('Input.insertText', { text: line })
+  await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+}
+await typeInTerminal(REMOTE, 'uname -a; df -h /config | tail -1; ls -la')
 await sleep(1_500)
-await shot('09-terminal')
+await shot('10-terminal')
+
+// The same terminal, divided: one half per job, each its own shell.
+await clickMenu('command:split-terminal-right')
+await waitFor(`document.querySelectorAll(${q(`${REMOTE} [data-showing] [data-pane]`)}).length === 2`, 20_000)
+await sleep(1_800)
+await typeInTerminal(REMOTE, 'du -sh /config/www /config/logs; echo; tail -4 /config/logs/access.log')
+await sleep(1_500)
+await shot('11-terminal-split')
 await clickSelector(`${REMOTE} [data-testid="tab-files"]`)
 
 // Searching a folder.
@@ -214,12 +290,29 @@ await js(`[...document.querySelectorAll(${q(`${LOCAL} button`)})].find((b) => b.
 await waitFor(`!!document.querySelector(${q(`${LOCAL} [data-testid="pane-search"]`)})`)
 await type(`${LOCAL} [data-testid="pane-search"]`, 'web')
 await sleep(600)
-await shot('10-search')
-
-// Last: the connections list, with a server saved in it.
+await shot('12-search')
 await clickSelector(`${LOCAL} [data-testid="search-close"]`)
+
+// Back to the home folder, where the demo files are.
 await js(`[...document.querySelectorAll(${q(`${LOCAL} button`)})].find((b) => b.getAttribute('aria-label') === 'Parent folder')?.click()`)
 await waitFor(`document.querySelector(${q(`${LOCAL} [data-testid="pane-path"]`)}).textContent.endsWith('FileBird Demo')`)
+
+// Making a folder, and the question asked before anything is deleted.
+await clickMenu('command:focus-local')
+await clickMenu('command:new-folder')
+await waitFor(`!!document.querySelector('[role="dialog"]')`)
+await sleep(400)
+await shot('13-new-folder')
+await clickText('[role="dialog"]', 'Cancel')
+await sleep(400)
+await clickSelector(`${LOCAL} [role="row"][data-path$="backup.tar.gz"]`)
+await clickMenu('command:delete')
+await waitFor(`document.body.innerText.includes('Trash')`, 10_000)
+await sleep(400)
+await shot('14-delete')
+await clickText('[role="dialog"]', 'Cancel')
+
+// Last: the connections list, with a server saved in it.
 await clickText(REMOTE, 'Disconnect')
 await waitFor(`document.body.innerText.includes('Saved servers')`, 20_000)
 await shot('02-saved-connections')
