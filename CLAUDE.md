@@ -257,6 +257,23 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   (Electron-internal) through the inspector to count listings; the check fails loudly
   (`listCounter` ≠ `'counting'`) if an Electron upgrade renames it.
 
+## Testing gotchas added with terminal splits (2026-10-19)
+
+- **A pane that is split is a smaller pane**, so output typed before a split
+  scrolls out of `.xterm-rows` (only the *visible* rows are in `innerText`).
+  Never assert that an old marker is still on screen to prove a shell survived:
+  ask it again (`echo` a fresh marker), or compare `$$` before and after.
+- **A marker must not appear in the command that prints it**, or `split()` finds
+  the echoed command line instead of the output. Build it from a variable:
+  `P=PIDA; echo ${P}=$$` echoes `${P}=$$` and prints `PIDA=12345`.
+- **`pyenv rehash` in the user's `~/.zshrc` can hang every interactive shell**,
+  which looks exactly like a broken local terminal: the pty echoes what is typed
+  (the line discipline does that) but nothing ever runs and no prompt appears.
+  It is a stale `~/.pyenv/shims/.pyenv-shim` lock, left by a killed rehash;
+  deleting it fixes every shell. node-pty itself is fine — check it by spawning
+  `/bin/echo` (works) and `zsh -f` (works) against plain `zsh` (hangs). This is
+  machine state, not the app: a `pty.spawn` probe outside the app reproduces it.
+
 ## Testing gotchas added in M10
 
 - **Node won't let a process exit while a debugger is attached.** Quitting the
@@ -443,9 +460,25 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   Upload/Download, New Folder, Rename…, Move to Trash…/Delete…, Refresh). The renderer
   sends action ids + enabled flags (`app.showContextMenu`); main owns the labels,
   validates the request and pops up `Menu`. Moving items is still not implemented.
-- **Terminals (M11, several per pane from 2026-10-15):** shells as tabs beside the
-  files, **up to `MAX_TERMINALS_PER_PANE` (3)** per pane
-  (`shared/constants/terminals.ts`) — "+" in the tab strip, "×" to close one, or
+  **A terminal has its own right-click menu** (user request, 2026-10-20) through the
+  same pipeline — Split Right, Split Down, New Terminal, Close This Split — and it
+  acts on **the pane under the pointer**, which is why `splitPaneFrom(paneKey, …)`
+  takes a named pane and the menu command is the one that looks up the focused one.
+- **Terminals (M11; several per pane from 2026-10-15; splits from 2026-10-19):**
+  shells as tabs beside the files, and each tab can be **split** side by side
+  (`CmdOrCtrl+D`) or stacked (`CmdOrCtrl+Shift+D`), as macOS Terminal does. A tab
+  holds a **layout tree** (`renderer/utils/terminal-layout.ts`, pure + tested):
+  splitting replaces a leaf with a split of itself plus a new leaf; closing a pane
+  puts the sibling in the split's place, so a split never has one child; the
+  neighbour takes the keyboard. Dividers are dragged (`TerminalTree`), clamped so
+  neither half can be squeezed away. Caps are **per side, counting tabs and splits
+  together**: `MAX_TERMINALS_PER_PANE` = 8 local, 4 remote
+  (`shared/constants/terminals.ts`) — a server allows ~10 channels, browsing takes
+  one and transfers up to four, so four shells leave one spare; a local shell is
+  only a process. Main's backstop rose to match (`MAX_SESSIONS` 12,
+  `MAX_SESSIONS_PER_CONNECTION` 4). **`data-pane` marks where a shell lives and is
+  what counts them** — the close button deliberately uses `data-close-pane`, since
+  it once doubled every pane in the count. "+" in the tab strip, "×" to close one, or
   **New Terminal** (`CmdOrCtrl+Shift+T`, not suppressed in a terminal: that is where
   it is reached for). `Cmd/Ctrl+\`` still toggles files ↔ the last terminal and opens
   the first one. Each tab freezes the folder it started in, so a second terminal can

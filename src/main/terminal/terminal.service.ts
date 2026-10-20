@@ -15,12 +15,16 @@ const BATCH_MS = 5
 
 /**
  * Terminals share a connection with file transfers, and a server allows only so
- * many channels on one connection (OpenSSH: ten, of which browsing and
- * transfers already use up to four). The UI opens one terminal per pane; these
- * caps are the backstop.
+ * many channels on one connection (OpenSSH: ten, of which browsing takes one
+ * and transfers up to four, so four shells leave one spare). Local shells are
+ * processes rather than channels, so only the total bounds them.
+ *
+ * The UI has its own, matching caps per pane
+ * (`MAX_TERMINALS_PER_PANE` in `shared/constants/terminals.ts`: eight local,
+ * four remote, counting splits); these are the backstop that doesn't trust it.
  */
-export const MAX_SESSIONS = 8
-export const MAX_SESSIONS_PER_CONNECTION = 3
+export const MAX_SESSIONS = 12
+export const MAX_SESSIONS_PER_CONNECTION = 4
 
 export interface TerminalOpenRequest {
   side: 'local' | 'remote'

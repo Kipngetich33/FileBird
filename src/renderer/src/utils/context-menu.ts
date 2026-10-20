@@ -29,3 +29,20 @@ export function fileContextMenu({ side, entries, canTransfer, canModify, trash }
   items.push({ action: 'refresh', enabled: true })
   return items
 }
+
+export interface TerminalMenuContext {
+  /** False once the pane runs as many shells as it may. */
+  canSplit: boolean
+  /** True when this tab holds more than one pane, so one of them can be closed. */
+  canClose: boolean
+}
+
+/** The right-click menu inside a terminal (user request, 2026-10-20). */
+export function terminalContextMenu({ canSplit, canClose }: TerminalMenuContext): ContextMenuItem[] {
+  return [
+    { action: 'split-right', enabled: canSplit },
+    { action: 'split-down', enabled: canSplit },
+    { action: 'new-terminal', enabled: canSplit },
+    { action: 'close-split', enabled: canClose }
+  ]
+}

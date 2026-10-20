@@ -21,8 +21,19 @@ import { describeDeleteOutcome, listNames } from '@renderer/utils/file-operation
 import { safeLocalStorage } from '@renderer/utils/split'
 import { DEFAULT_ZOOM, readStoredZoom, stepZoom, storeZoom, terminalFontSize } from '@renderer/utils/zoom'
 import { afterClosing, canAddTerminal, terminalKey, type TerminalTab } from '@renderer/utils/terminal-tabs'
-import { MAX_TERMINALS_PER_PANE } from '@shared/constants/terminals'
-import { TerminalView } from '@renderer/components/Terminal/TerminalView'
+import {
+  findPane,
+  firstPane,
+  leaf,
+  neighbourOf,
+  paneCount,
+  removePane,
+  resizeSplit,
+  splitPane,
+  type SplitDirection
+} from '@renderer/utils/terminal-layout'
+import { maxTerminalsFor } from '@shared/constants/terminals'
+import { TerminalPanes } from '@renderer/components/Terminal/TerminalPanes'
 import { NameDialog } from './NameDialog'
 import { PaneSearch } from './PaneSearch'
 import { PaneTabs, type PaneTab } from './PaneTabs'
@@ -131,14 +142,24 @@ export function FilePane({
    */
   const [terminals, setTerminals] = useState<TerminalTab[]>([])
   const [activeTerminal, setActiveTerminal] = useState<string | null>(null)
+  /** The pane the keyboard is in, which is the one a split or a close acts on. */
+  const [focusedPane, setFocusedPane] = useState<string | null>(null)
+  const focusedPaneRef = useRef(focusedPane)
+  focusedPaneRef.current = focusedPane
   // Read through refs, because opening and closing decide what to do from the
   // current tabs; deciding inside a state updater may be deferred or repeated.
   const terminalsRef = useRef(terminals)
   terminalsRef.current = terminals
   const activeTerminalRef = useRef(activeTerminal)
   activeTerminalRef.current = activeTerminal
-  /** Only ever counts up, so a new tab can never reuse a closing one's key. */
+  /** These only ever count up, so a new tab, pane or divider never reuses a closing one's key. */
   const openedTerminals = useRef(0)
+  const openedPanes = useRef(0)
+  const openedSplits = useRef(0)
+  const nextPane = (): string => {
+    openedPanes.current += 1
+    return `pane-${openedPanes.current}`
+  }
   const [operation, setOperation] = useState<Operation | null>(null)
   const [operationBusy, setOperationBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -281,19 +302,80 @@ export function FilePane({
     paneRef.current?.focus()
   }, [])
 
-  /** Adds a terminal and shows it, starting it in the folder on show now. */
+  const atCapMessage = (): void =>
+    setOperationMessage(`A pane runs up to ${maxTerminalsFor(side)} terminals at a time, counting splits.`)
+
+  /** Adds a terminal tab and shows it, starting it in the folder on show now. */
   const openTerminal = useCallback(() => {
     if (terminal === undefined) return
-    if (!canAddTerminal(terminalsRef.current)) {
-      setOperationMessage(`A pane runs up to ${MAX_TERMINALS_PER_PANE} terminals at a time.`)
+    if (!canAddTerminal(terminalsRef.current, side)) {
+      atCapMessage()
       return
     }
     openedTerminals.current += 1
-    const added = { key: terminalKey(openedTerminals.current), cwd: listing?.path ?? null }
+    const pane = nextPane()
+    const added: TerminalTab = { key: terminalKey(openedTerminals.current), layout: leaf(pane, listing?.path ?? null) }
     setTerminals([...terminalsRef.current, added])
     setActiveTerminal(added.key)
+    setFocusedPane(pane)
     setTab('terminal')
-  }, [terminal, listing])
+  }, [terminal, listing, side])
+
+  /**
+   * Divides one named pane, side by side or one above the other (user request,
+   * 2026-10-19). Named rather than "the focused one", because the right-click
+   * menu acts on the pane under the pointer (user request, 2026-10-20).
+   */
+  const splitPaneFrom = useCallback(
+    (target: string, direction: SplitDirection) => {
+      if (terminal === undefined) return
+      const tabs = terminalsRef.current
+      const current = tabs.find((item) => findPane(item.layout, target) !== null)
+      if (current === undefined) return
+      if (!canAddTerminal(tabs, side)) {
+        atCapMessage()
+        return
+      }
+      const pane = nextPane()
+      openedSplits.current += 1
+      const layout = splitPane(current.layout, target, leaf(pane, listing?.path ?? null), direction, `split-${openedSplits.current}`)
+      setTerminals(tabs.map((item) => (item.key === current.key ? { ...item, layout } : item)))
+      setActiveTerminal(current.key)
+      setFocusedPane(pane)
+      setTab('terminal')
+    },
+    [terminal, listing, side]
+  )
+
+  /** The menu command: it divides the pane the keyboard is in, opening one first if there is none. */
+  const splitTerminal = useCallback(
+    (direction: SplitDirection) => {
+      if (terminal === undefined) return
+      const current = terminalsRef.current.find((item) => item.key === activeTerminalRef.current)
+      if (current === undefined) {
+        openTerminal()
+        return
+      }
+      const focused = focusedPaneRef.current
+      const target = focused !== null && findPane(current.layout, focused) !== null ? focused : firstPane(current.layout).key
+      splitPaneFrom(target, direction)
+    },
+    [terminal, openTerminal, splitPaneFrom]
+  )
+
+  /**
+   * Moves one divider; the other splits keep their own share. A drag fires
+   * every pointer move, so tabs whose layout doesn't change keep the object
+   * they had and are not re-rendered.
+   */
+  const resizePane = useCallback((splitId: string, ratio: number) => {
+    setTerminals(
+      terminalsRef.current.map((item) => {
+        const layout = resizeSplit(item.layout, splitId, ratio)
+        return layout === item.layout ? item : { ...item, layout }
+      })
+    )
+  }, [])
 
   /** Shows a terminal that is already open. */
   const showTerminal = useCallback((key: string) => {
@@ -323,6 +405,35 @@ export function FilePane({
       paneRef.current?.querySelector<HTMLTextAreaElement>('[data-showing] .xterm-helper-textarea')?.focus()
     }
   }, [])
+
+  /**
+   * Closes one pane of a split: the rest of the tab stays, the pane beside it
+   * takes the keyboard, and a tab down to its last pane closes with it.
+   */
+  const closePane = useCallback(
+    (pane: string) => {
+      const tabs = terminalsRef.current
+      const owner = tabs.find((item) => findPane(item.layout, pane) !== null)
+      if (owner === undefined) return
+      const remaining = removePane(owner.layout, pane)
+      if (remaining === null) {
+        closeTerminal(owner.key)
+        return
+      }
+      const neighbour = neighbourOf(owner.layout, pane)
+      setTerminals(tabs.map((item) => (item.key === owner.key ? { ...item, layout: remaining } : item)))
+      if (focusedPaneRef.current === pane) setFocusedPane(neighbour)
+      // The pane beside it is already in the page, so the keyboard can go
+      // straight back to it rather than falling through to the file list.
+      if (neighbour !== null) {
+        requestAnimationFrame(() =>
+          paneRef.current?.querySelector<HTMLTextAreaElement>(`[data-pane="${CSS.escape(neighbour)}"] .xterm-helper-textarea`)?.focus()
+        )
+      }
+    },
+    [closeTerminal]
+  )
+
 
   /** `Cmd/Ctrl+\``: out of a terminal to the files, or back to the last one — opening one if there is none. */
   const toggleTerminal = useCallback(() => {
@@ -422,6 +533,7 @@ export function FilePane({
       deleteSelection: startDelete,
       toggleTerminal,
       newTerminal: openTerminal,
+      splitTerminal,
       search: startSearch,
       zoomIn: () => adjustZoom(1),
       zoomOut: () => adjustZoom(-1),
@@ -439,6 +551,7 @@ export function FilePane({
       startDelete,
       toggleTerminal,
       openTerminal,
+      splitTerminal,
       startSearch,
       adjustZoom,
       resetZoom
@@ -634,6 +747,8 @@ export function FilePane({
             onShowTerminal={showTerminal}
             onNewTerminal={openTerminal}
             onCloseTerminal={closeTerminal}
+            canAdd={canAddTerminal(terminals, side)}
+            cap={maxTerminalsFor(side)}
           />
         )}
 
@@ -756,14 +871,22 @@ export function FilePane({
                 hidden={!showing}
                 data-terminal={item.key}
                 data-showing={showing || undefined}
+                data-panes={paneCount(item.layout)}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <TerminalView
+                <TerminalPanes
+                  node={item.layout}
                   side={terminal.side}
                   {...(terminal.connectionId === undefined ? {} : { connectionId: terminal.connectionId })}
-                  cwd={item.cwd}
                   visible={showing}
                   fontSize={terminalFontSize(zoom)}
+                  focusedPane={focusedPane}
+                  onFocusPane={setFocusedPane}
+                  onClosePane={closePane}
+                  onSplitPane={splitPaneFrom}
+                  onNewTerminal={openTerminal}
+                  canSplit={canAddTerminal(terminals, side)}
+                  onResize={resizePane}
                 />
               </div>
             )

@@ -1,5 +1,4 @@
 import type { JSX } from 'react'
-import { MAX_TERMINALS_PER_PANE } from '@shared/constants/terminals'
 import { terminalLabel, type TerminalTab } from '@renderer/utils/terminal-tabs'
 
 export type PaneTab = 'files' | 'terminal'
@@ -17,6 +16,9 @@ interface PaneTabsProps {
   onShowTerminal: (key: string) => void
   onNewTerminal: () => void
   onCloseTerminal: (key: string) => void
+  /** False once the pane runs as many shells as it may, counting splits. */
+  canAdd: boolean
+  cap: number
 }
 
 /**
@@ -32,11 +34,12 @@ export function PaneTabs({
   onShowFiles,
   onShowTerminal,
   onNewTerminal,
-  onCloseTerminal
+  onCloseTerminal,
+  canAdd,
+  cap
 }: PaneTabsProps): JSX.Element {
   const underline = (selected: boolean): string =>
     selected ? (paneActive ? 'border-sky-400 text-sky-200' : 'border-white/30 text-zinc-200') : 'border-transparent text-zinc-500 hover:text-zinc-300'
-  const atCap = terminals.length >= MAX_TERMINALS_PER_PANE
 
   return (
     <div role="tablist" aria-label="Pane view" className="flex h-7 shrink-0 items-stretch gap-1 border-b border-white/[0.06] px-2">
@@ -102,9 +105,9 @@ export function PaneTabs({
       <button
         type="button"
         hidden={terminals.length === 0}
-        disabled={atCap}
+        disabled={!canAdd}
         aria-label="New terminal"
-        title={atCap ? `A pane runs up to ${MAX_TERMINALS_PER_PANE} terminals` : 'New terminal'}
+        title={canAdd ? 'New terminal' : `A pane runs up to ${cap} terminals, counting splits`}
         data-testid="tab-terminal-new"
         onClick={onNewTerminal}
         className="-mb-px border-b border-transparent px-2 text-[12px] leading-none text-zinc-600 transition hover:text-zinc-200 disabled:text-zinc-700 disabled:hover:text-zinc-700"

@@ -1,4 +1,5 @@
 import type { DeleteOutcome, MoveOutcome } from '@shared/types/file-operations'
+import type { SplitDirection } from '@renderer/utils/terminal-layout'
 import type { FileEntry } from '@shared/types/files'
 
 export type PaneId = 'local' | 'remote'
@@ -20,6 +21,8 @@ export interface PaneHandle {
   toggleTerminal: () => void
   /** Opens another terminal in this pane, up to its cap (user request, 2026-10-15). */
   newTerminal: () => void
+  /** Divides the terminal the keyboard is in, side by side or one above the other. */
+  splitTerminal: (direction: SplitDirection) => void
   /** Opens the pane's search box (Milestone 12). */
   search: () => void
   /** Scales what this pane shows: its listing, or its terminal's text. */

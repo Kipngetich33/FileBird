@@ -4,7 +4,15 @@ import { AppError } from './errors'
 import { assertBoolean, assertObject } from './ipc/validate'
 
 /** Actions that sit together; a separator goes between groups. */
-const GROUPS: ContextMenuAction[][] = [['open'], ['upload', 'download'], ['new-folder', 'rename', 'move-to-trash', 'delete'], ['refresh']]
+const GROUPS: ContextMenuAction[][] = [
+  ['open'],
+  ['upload', 'download'],
+  ['new-folder', 'rename', 'move-to-trash', 'delete'],
+  ['refresh'],
+  // A terminal's menu: how to divide it, then the panes themselves.
+  ['split-right', 'split-down'],
+  ['new-terminal', 'close-split']
+]
 
 export function contextMenuLabel(action: ContextMenuAction, platform: NodeJS.Platform): string {
   switch (action) {
@@ -24,6 +32,14 @@ export function contextMenuLabel(action: ContextMenuAction, platform: NodeJS.Pla
       return 'Delete…'
     case 'refresh':
       return 'Refresh'
+    case 'split-right':
+      return 'Split Right'
+    case 'split-down':
+      return 'Split Down'
+    case 'close-split':
+      return 'Close This Split'
+    case 'new-terminal':
+      return 'New Terminal'
   }
 }
 

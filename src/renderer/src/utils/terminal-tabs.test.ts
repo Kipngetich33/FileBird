@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_TERMINALS_PER_PANE } from '@shared/constants/terminals'
-import { afterClosing, canAddTerminal, terminalKey, terminalLabel, type TerminalTab } from './terminal-tabs'
+import { MAX_TERMINALS_PER_PANE, maxTerminalsFor } from '@shared/constants/terminals'
+import { leaf, splitPane } from './terminal-layout'
+import { afterClosing, canAddTerminal, terminalKey, terminalLabel, totalPanes, type TerminalTab } from './terminal-tabs'
 
-const tabs = (...keys: string[]): TerminalTab[] => keys.map((key) => ({ key, cwd: null }))
+const tabs = (...keys: string[]): TerminalTab[] => keys.map((key) => ({ key, layout: leaf(`${key}-1`, null) }))
 
 describe('how many a pane may run', () => {
-  it('allows more until the cap, which leaves room for both panes at once', () => {
-    expect(canAddTerminal(tabs())).toBe(true)
-    expect(canAddTerminal(tabs('a', 'b'))).toBe(true)
-    expect(canAddTerminal(tabs('a', 'b', 'c'))).toBe(false)
-    expect(MAX_TERMINALS_PER_PANE * 2).toBeLessThanOrEqual(8)
+  it('allows more until the cap, counting the tabs', () => {
+    expect(canAddTerminal(tabs(), 'remote')).toBe(true)
+    expect(canAddTerminal(tabs('a', 'b'), 'remote')).toBe(true)
+    expect(canAddTerminal(tabs('a', 'b', 'c', 'd'), 'remote')).toBe(false)
+  })
+
+  it('counts split panes too, not just tabs', () => {
+    const split = [{ key: 'a', layout: splitPane(leaf('a-1', null), 'a-1', leaf('a-2', null), 'row', 's1') }]
+    expect(totalPanes(split)).toBe(2)
+    expect(canAddTerminal([...split, ...tabs('b', 'c')], 'remote')).toBe(false)
+  })
+
+  it('leaves a remote pane a spare SSH channel, and allows a local pane more', () => {
+    // A server allows about ten channels; browsing takes one and transfers up to four.
+    expect(maxTerminalsFor('remote')).toBeLessThanOrEqual(5)
+    expect(maxTerminalsFor('local')).toBeGreaterThan(MAX_TERMINALS_PER_PANE.remote)
   })
 })
 

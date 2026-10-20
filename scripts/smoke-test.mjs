@@ -83,6 +83,9 @@ async function profileIds() {
 
 // ------------------------------------------------------------------ app driver ---
 
+/** What launchd gives an app opened from the Dock, which is what its shells inherit. */
+const LAUNCH_PATH = '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+
 async function launchApp() {
   // Electron honours ELECTRON_RUN_AS_NODE from the parent environment: if it is
   // set the binary runs main.js as a plain Node script and never opens a window.
@@ -91,7 +94,17 @@ async function launchApp() {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     // FLY_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
-    env: { ...inherited, FLY_DEV_HOME: fixture, FLY_DEV_TRASH_DIR: join(scratch, 'trash'), FLY_DEV_DOWNLOADS: join(scratch, 'downloads') }
+    // LAUNCH_PATH, not this shell's PATH: an app opened from the Dock is started
+    // by launchd with the system path, and the terminals it opens inherit that.
+    // A developer's PATH would have the app's shells running version managers
+    // (nvm, pyenv) that a user's never would — one of which can hang a shell.
+    env: {
+      ...inherited,
+      PATH: LAUNCH_PATH,
+      FLY_DEV_HOME: fixture,
+      FLY_DEV_TRASH_DIR: join(scratch, 'trash'),
+      FLY_DEV_DOWNLOADS: join(scratch, 'downloads')
+    }
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
   const launchedAt = Date.now()
@@ -1892,32 +1905,49 @@ try {
 
   await app.screenshot('terminal-tabs')
 
-  // A third from the menu, while a terminal has the keyboard; then the cap holds.
+  // A third from the menu, while a terminal has the keyboard.
   await app.clickMenu('command:new-terminal')
   const threeTabs = await app.waitFor(`${terminalTabs(LOCAL)} === 3`, 10000)
+
+  // Fill the pane to its cap — tabs and splits share one budget — and watch it
+  // refuse one more. LOCAL_CAP is MAX_TERMINALS_PER_PANE.local; this fails
+  // loudly if that changes, which is the point.
+  const LOCAL_CAP = 8
+  const shellsOpen = `document.querySelectorAll(${q(`${LOCAL} [data-pane]`)}).length`
+  for (let guard = 0; guard < LOCAL_CAP && (await app.js(shellsOpen)) < LOCAL_CAP; guard += 1) {
+    await app.clickMenu('command:split-terminal-right')
+    await sleep(300)
+  }
+  const filled = await app.waitFor(`${shellsOpen} === ${LOCAL_CAP}`, 20000)
   const addDisabled = await app.js(`document.querySelector(${q(`${LOCAL} [data-testid="tab-terminal-new"]`)})?.disabled === true`)
   await app.clickMenu('command:new-terminal')
   await sleep(400)
   record(
-    'terminals: New Terminal works from a terminal, and a pane stops at its cap',
-    { threeTabs, addDisabled, tabsNow: await app.js(terminalTabs(LOCAL)), said: await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`)) },
-    threeTabs && addDisabled && (await app.js(terminalTabs(LOCAL))) === 3 &&
-      (await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`))).includes('up to 3 terminals')
+    'terminals: New Terminal works from a terminal, and a pane stops at its cap of shells',
+    {
+      threeTabs,
+      filled,
+      addDisabled,
+      shells: await app.js(shellsOpen),
+      said: await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`))
+    },
+    threeTabs && filled && addDisabled && (await app.js(shellsOpen)) === LOCAL_CAP &&
+      (await app.js(textOf(`${LOCAL} [data-testid="operation-message"]`))).includes(`up to ${LOCAL_CAP} terminals`)
   )
 
-  // Closing a tab ends that session only, and the one to its left takes over.
+  // Closing a tab ends every shell inside it, and the tab to its left takes over.
   await clickAt(`${LOCAL} [data-testid="tab-terminal-close"][data-terminal="terminal-3"]`)
+  await sleep(400)
   await clickAt(`${LOCAL} [data-testid="tab-terminal-close"][data-terminal="terminal-2"]`)
-  const oneLeft = await app.waitFor(`${terminalTabs(LOCAL)} === 1`, 10000)
+  const oneLeft = await app.waitFor(`${terminalTabs(LOCAL)} === 1 && ${shellsOpen} === 1`, 10000)
   await clickAt(`${LOCAL} [data-testid="tab-terminal"][data-terminal="terminal-1"]`)
   const firstStillRunning = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`, 10000)
   await app.typeInTerminal(LOCAL, 'echo FLY-FIRST-STILL-ALIVE')
   const firstAnswers = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-FIRST-STILL-ALIVE')`, 15000)
   record(
     'terminals: closing a tab ends that shell only, and the first keeps its session and scrollback',
-    { oneLeft, firstStillRunning, firstAnswers, sessions: await app.js(`document.querySelectorAll(${q(`${LOCAL} [data-terminal] .xterm-rows`)}).length`) },
-    oneLeft && firstStillRunning && firstAnswers &&
-      (await app.js(`document.querySelectorAll(${q(`${LOCAL} [data-terminal] .xterm-rows`)}).length`)) === 1
+    { oneLeft, firstStillRunning, firstAnswers, shells: await app.js(shellsOpen) },
+    oneLeft && firstStillRunning && firstAnswers && (await app.js(shellsOpen)) === 1
   )
 
   // Closing a tab beside the one on show must leave the keyboard in that
@@ -1936,6 +1966,117 @@ try {
     'terminals: closing a tab beside the one on show leaves the keyboard in that terminal',
     { focusedAfterClose, typingLanded, tabs: await app.js(terminalTabs(LOCAL)) },
     focusedAfterClose.includes('xterm-helper-textarea') && typingLanded && (await app.js(terminalTabs(LOCAL))) === 1
+  )
+
+  // --------------------------------------------- terminals: splitting a tab ---
+
+  const panesIn = (scope) => `[...document.querySelectorAll(${q(`${scope} [data-showing] [data-pane]`)})].map((el) => el.dataset.pane)`
+  /** Types into one half of a split. Splitting shrinks a pane, so older output
+      scrolls out of the visible rows: what proves a shell is still alive is
+      that it still answers, not that its old output is still on screen. */
+  const typeInPane = async (scope, key, line) => {
+    await app.js(`document.querySelector(${q(`${scope} [data-showing] [data-pane="${key}"] .xterm-helper-textarea`)})?.focus()`)
+    await app.send('Input.insertText', { text: line })
+    await app.press('Enter', 'Enter', 13)
+  }
+  const paneText = (scope, key) => `(document.querySelector(${q(`${scope} [data-showing] [data-pane="${key}"] .xterm-rows`)})?.innerText ?? '')`
+  const dividers = (scope) =>
+    `[...document.querySelectorAll(${q(`${scope} [data-showing] [data-testid="split-divider"]`)})].map((el) => el.dataset.direction)`
+
+  record(
+    'menu: View offers both splits, on Cmd/Ctrl+D and Cmd/Ctrl+Shift+D',
+    { right: byId['command:split-terminal-right'], down: byId['command:split-terminal-down'] },
+    byId['command:split-terminal-right']?.accelerator === 'CmdOrCtrl+D' &&
+      byId['command:split-terminal-down']?.accelerator === 'CmdOrCtrl+Shift+D' &&
+      ['command:split-terminal-right', 'command:split-terminal-down'].every((id) => byId[id]?.parent === 'View')
+  )
+
+  // Side by side: the new half runs a shell of its own, in the same tab.
+  await app.clickMenu('command:split-terminal-right')
+  const splitInTwo = await app.waitFor(`${panesIn(LOCAL)}.length === 2`, 10000)
+  const [firstPane, secondPane] = await app.js(panesIn(LOCAL))
+  await app.waitFor(`${paneText(LOCAL, secondPane)}.trim().length > 0`, 15000)
+  // Nothing is focused by hand: the new half should already have the keyboard.
+  await app.send('Input.insertText', { text: 'echo FLY-SPLIT-RIGHT' })
+  await app.press('Enter', 'Enter', 13)
+  const ranInNewHalf = await app.waitFor(`${paneText(LOCAL, secondPane)}.includes('FLY-SPLIT-RIGHT')`, 15000)
+  // The half that was there carries on as its own shell, and never sees what
+  // was typed into the new one.
+  // Its process id, so the same shell can be recognised later: markers typed now
+  // scroll out of sight as the pane is split and resized, but a pid can be asked
+  // for again. The marker is built from a variable so it appears only in the output.
+  await typeInPane(LOCAL, firstPane, 'echo FLY-SPLIT-LEFT; P=PIDA; echo ${P}=$$')
+  const firstStillAnswers = await app.waitFor(`${paneText(LOCAL, firstPane)}.includes('FLY-SPLIT-LEFT')`, 15000)
+  // The pid is printed by a second command: wait for it rather than for the first.
+  await app.waitFor(`${paneText(LOCAL, firstPane)}.includes('PIDA=')`, 15000)
+  const firstShellPid = await app.js(`parseInt(${paneText(LOCAL, firstPane)}.split('PIDA=')[1] ?? '0', 10)`)
+  record(
+    'terminals: Split Terminal Right divides the tab in two, each half its own shell',
+    {
+      splitInTwo,
+      dividers: await app.js(dividers(LOCAL)),
+      tabs: await app.js(terminalTabs(LOCAL)),
+      ranInNewHalf,
+      firstStillAnswers
+    },
+    splitInTwo && ranInNewHalf && firstStillAnswers && (await app.js(dividers(LOCAL))).join() === 'row' &&
+      (await app.js(terminalTabs(LOCAL))) === 1 &&
+      !(await app.js(`${paneText(LOCAL, firstPane)}.includes('FLY-SPLIT-RIGHT')`)) &&
+      !(await app.js(`${paneText(LOCAL, secondPane)}.includes('FLY-SPLIT-LEFT')`))
+  )
+
+  // One above the other, inside the half that had the keyboard.
+  const widthBeforeDrag = await app.js(`document.querySelector(${q(`${LOCAL} [data-showing] [data-pane="${firstPane}"]`)})?.getBoundingClientRect().width ?? 0`)
+  await app.clickMenu('command:split-terminal-down')
+  const splitInThree = await app.waitFor(`${panesIn(LOCAL)}.length === 3`, 10000)
+  record(
+    'terminals: Split Terminal Down stacks a third shell inside the half that had the keyboard',
+    { splitInThree, dividers: await app.js(dividers(LOCAL)), panes: await app.js(panesIn(LOCAL)) },
+    splitInThree && (await app.js(dividers(LOCAL))).sort().join() === 'column,row'
+  )
+
+  // The divider between the halves can be dragged.
+  const dividerBox = await app.js(box(`${LOCAL} [data-showing] [data-testid="split-divider"][data-direction="row"]`))
+  await app.mouseDrag(dividerBox.x + dividerBox.w / 2, dividerBox.y + dividerBox.h / 2, dividerBox.x + dividerBox.w / 2 - 120)
+  await sleep(400)
+  const widthAfterDrag = await app.js(`document.querySelector(${q(`${LOCAL} [data-showing] [data-pane="${firstPane}"]`)})?.getBoundingClientRect().width ?? 0`)
+  record(
+    'terminals: dragging the divider resizes the halves',
+    { widthBeforeDrag, widthAfterDrag },
+    widthBeforeDrag > 0 && widthAfterDrag < widthBeforeDrag - 60
+  )
+
+  // Right-clicking inside a terminal offers the same splits (user request, 2026-10-20).
+  // Native menus can't be driven, so smoke records the labels and picks one.
+  const beforeMenuPanes = (await app.js(panesIn(LOCAL))).length
+  const terminalMenu = await app.contextMenu(`${LOCAL} [data-showing] [data-pane="${firstPane}"]`, 'Split Down', { centre: true })
+  const splitFromMenu = await app.waitFor(`${panesIn(LOCAL)}.length === ${beforeMenuPanes + 1}`, 10000)
+  record(
+    'terminals: right-clicking a terminal offers the splits, and acts on that pane',
+    { menu: terminalMenu, beforeMenuPanes, after: await app.js(panesIn(LOCAL)), splitFromMenu },
+    // The stub records each item as a label, with a separator as "—".
+    splitFromMenu && (terminalMenu ?? []).join(' | ') === 'Split Right | Split Down | — | New Terminal | Close This Split'
+  )
+
+  // Closing the extra halves leaves the first shell, still running, with the keyboard.
+  for (const key of (await app.js(panesIn(LOCAL))).filter((pane) => pane !== firstPane)) {
+    await clickAt(`${LOCAL} [data-showing] [data-testid="pane-split-close"][data-close-pane="${key}"]`)
+    await sleep(400)
+  }
+  const onePaneLeft = await app.waitFor(`${panesIn(LOCAL)}.length === 1`, 10000)
+  const focusedAfterSplitClose = await app.js(`(document.activeElement?.className ?? '')`)
+  await app.send('Input.insertText', { text: 'echo FLY-AFTER-SPLITS' })
+  await app.press('Enter', 'Enter', 13)
+  const stillTyping = await app.waitFor(`${paneText(LOCAL, firstPane)}.includes('FLY-AFTER-SPLITS')`, 15000)
+  // Still the very same shell it started as, not a fresh one put in its place.
+  await typeInPane(LOCAL, firstPane, 'P=PIDB; echo ${P}=$$')
+  await app.waitFor(`${paneText(LOCAL, firstPane)}.includes('PIDB=')`, 15000)
+  const pidNow = await app.js(`parseInt(${paneText(LOCAL, firstPane)}.split('PIDB=')[1] ?? '0', 10)`)
+  record(
+    'terminals: closing a split leaves the other shell running, with the keyboard in it',
+    { onePaneLeft, focusedAfterSplitClose, stillTyping, firstShellPid, pidNow, dividers: await app.js(dividers(LOCAL)) },
+    onePaneLeft && stillTyping && focusedAfterSplitClose.includes('xterm-helper-textarea') &&
+      (await app.js(dividers(LOCAL))).length === 0 && firstShellPid > 0 && pidNow === firstShellPid
   )
 
   // The remote pane: a shell on the server, over the connection already open.
@@ -1981,14 +2122,16 @@ try {
   const localAfterDisconnect = await app.js(`JSON.stringify({ path: ${pathOf(LOCAL)}, selected: document.querySelector(${q(`${LOCAL} [role="row"][aria-selected="true"]`)})?.dataset.path })`)
   record('independence: disconnecting leaves the local path and selection untouched', localAfterDisconnect, localAfterDisconnect === localBeforeDisconnect)
 
+  // The local shell still answers after the server has gone.
+  await app.typeInTerminal(LOCAL, 'echo FLY-LOCAL-SURVIVED')
+  const localSurvived = await app.waitFor(`${terminalText(LOCAL)}.includes('FLY-LOCAL-SURVIVED')`, 15000)
   record(
     'terminal: disconnecting closes the remote terminal, and the local one carries on',
     {
       remoteTabs: await app.js(`document.querySelectorAll(${q(tab(REMOTE, 'terminal'))}).length`),
-      localStillThere: await app.js(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`)
+      localSurvived
     },
-    (await app.js(`document.querySelectorAll(${q(tab(REMOTE, 'terminal'))}).length`)) === 0 &&
-      (await app.js(`${terminalText(LOCAL)}.includes('FLY-LOCAL-42')`))
+    (await app.js(`document.querySelectorAll(${q(tab(REMOTE, 'terminal'))}).length`)) === 0 && localSurvived
   )
 
   // ----------------------------------------------------- password, not remembered ---

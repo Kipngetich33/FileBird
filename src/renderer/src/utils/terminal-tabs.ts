@@ -1,16 +1,18 @@
 /**
  * Bookkeeping for a pane's terminal tabs (user request, 2026-10-15). Kept pure
  * and apart from the pane, because the interesting part is what happens to the
- * selection when a tab in the middle is closed.
+ * selection when a tab in the middle is closed. Each tab holds a layout tree of
+ * one or more shells (`terminal-layout.ts`).
  */
 
-import { MAX_TERMINALS_PER_PANE } from '@shared/constants/terminals'
+import { maxTerminalsFor } from '@shared/constants/terminals'
+import { paneCount, type TerminalNode } from './terminal-layout'
 
 export interface TerminalTab {
   /** Stable for the tab's lifetime: React must not remount a live session. */
   key: string
-  /** The folder it was started in. Each tab keeps its own; the shell moves on its own from there. */
-  cwd: string | null
+  /** The panes inside it: one shell, or a tree of them once it has been split. */
+  layout: TerminalNode
 }
 
 export const terminalKey = (ordinal: number): string => `terminal-${ordinal}`
@@ -18,7 +20,11 @@ export const terminalKey = (ordinal: number): string => `terminal-${ordinal}`
 /** "Terminal", then "Terminal 2": numbered by position, so closing one never leaves a gap. */
 export const terminalLabel = (index: number): string => (index === 0 ? 'Terminal' : `Terminal ${index + 1}`)
 
-export const canAddTerminal = (tabs: readonly TerminalTab[]): boolean => tabs.length < MAX_TERMINALS_PER_PANE
+/** Every shell the pane is running, across all of its tabs. */
+export const totalPanes = (tabs: readonly TerminalTab[]): number => tabs.reduce((sum, tab) => sum + paneCount(tab.layout), 0)
+
+export const canAddTerminal = (tabs: readonly TerminalTab[], side: 'local' | 'remote'): boolean =>
+  totalPanes(tabs) < maxTerminalsFor(side)
 
 /**
  * What is left after closing one tab, and which one takes over: the tab to its

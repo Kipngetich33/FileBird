@@ -163,6 +163,12 @@ export function MainPage({ runtimeLabel, remote, platform }: MainPageProps): JSX
           case 'new-terminal':
             pane(activeRef.current)?.newTerminal()
             break
+          case 'split-terminal-right':
+            pane(activeRef.current)?.splitTerminal('row')
+            break
+          case 'split-terminal-down':
+            pane(activeRef.current)?.splitTerminal('column')
+            break
           case 'find':
             pane(activeRef.current)?.search()
             break

@@ -12,6 +12,8 @@ export const MENU_COMMANDS = [
   'delete',
   'toggle-terminal',
   'new-terminal',
+  'split-terminal-right',
+  'split-terminal-down',
   'find',
   'zoom-in',
   'zoom-out',

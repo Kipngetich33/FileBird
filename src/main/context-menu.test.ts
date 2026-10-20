@@ -72,6 +72,34 @@ describe('buildContextMenu', () => {
     expect(choose).toHaveBeenCalledWith('download')
   })
 
+  it('gives every action a label of its own', () => {
+    const labels = CONTEXT_MENU_ACTIONS.map((action) => contextMenuLabel(action, 'darwin'))
+    expect(new Set(labels).size).toBe(CONTEXT_MENU_ACTIONS.length)
+    expect(labels.every((label) => label.length > 0)).toBe(true)
+  })
+
+  it("shows a terminal's own menu, splits first and apart from the panes", () => {
+    const chosen: string[] = []
+    const template = buildContextMenu(
+      [
+        { action: 'close-split', enabled: true },
+        { action: 'split-right', enabled: true },
+        { action: 'new-terminal', enabled: false },
+        { action: 'split-down', enabled: true }
+      ],
+      'darwin',
+      (action) => chosen.push(action)
+    )
+    expect(template.map((item) => item.label ?? item.type)).toEqual([
+      'Split Right',
+      'Split Down',
+      'separator',
+      'New Terminal',
+      'Close This Split'
+    ])
+    expect(template.find((item) => item.label === 'New Terminal')?.enabled).toBe(false)
+  })
+
   it('names the Recycle Bin on Windows', () => {
     expect(contextMenuLabel('move-to-trash', 'win32')).toBe('Move to Recycle Bin…')
     expect(contextMenuLabel('move-to-trash', 'linux')).toBe('Move to Trash…')

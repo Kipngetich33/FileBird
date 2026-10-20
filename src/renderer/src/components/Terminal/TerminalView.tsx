@@ -50,6 +50,8 @@ export interface TerminalViewProps {
   visible: boolean
   /** Text size in pixels, from the pane's zoom level. Changing it refits and resizes the shell. */
   fontSize: number
+  /** Called when the keyboard enters this terminal, so a split pane knows it is the live one. */
+  onFocus?: () => void
 }
 
 /**
@@ -57,12 +59,14 @@ export interface TerminalViewProps {
  * main process. Bytes travel both ways, because decoding halfway would break
  * any character split across two chunks.
  */
-export function TerminalView({ side, connectionId, cwd, visible, fontSize }: TerminalViewProps): JSX.Element {
+export function TerminalView({ side, connectionId, cwd, visible, fontSize, onFocus }: TerminalViewProps): JSX.Element {
   const holder = useRef<HTMLDivElement>(null)
   // Read through a ref when the terminal is built: zooming must not be a reason
   // to tear down the session and lose its scrollback.
   const fontSizeRef = useRef(fontSize)
   fontSizeRef.current = fontSize
+  const onFocusRef = useRef(onFocus)
+  onFocusRef.current = onFocus
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -176,7 +180,10 @@ export function TerminalView({ side, connectionId, cwd, visible, fontSize }: Ter
       })
 
     // The menu's file commands give up their keys while the terminal has focus.
-    const onFocusIn = (): void => void terminalsService.setFocus(true)
+    const onFocusIn = (): void => {
+      onFocusRef.current?.()
+      void terminalsService.setFocus(true)
+    }
     const onFocusOut = (): void => void terminalsService.setFocus(false)
     container.addEventListener('focusin', onFocusIn)
     container.addEventListener('focusout', onFocusOut)

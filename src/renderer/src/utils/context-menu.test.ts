@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FileEntry } from '@shared/types/files'
-import { fileContextMenu } from './context-menu'
+import { fileContextMenu, terminalContextMenu } from './context-menu'
 
 const entry = (name: string, kind: FileEntry['kind']): FileEntry => ({
   name,
@@ -43,5 +43,26 @@ describe('fileContextMenu', () => {
 
   it('disables file operations for a pane that has none', () => {
     expect(actions(fileContextMenu({ ...local, canModify: false, entries: [folder] }))).toEqual(['open', 'upload', 'new-folder (off)', 'rename (off)', 'move-to-trash (off)', 'refresh'])
+  })
+})
+
+describe('terminalContextMenu', () => {
+  it('offers both splits, a new terminal and closing this one', () => {
+    expect(terminalContextMenu({ canSplit: true, canClose: true })).toEqual([
+      { action: 'split-right', enabled: true },
+      { action: 'split-down', enabled: true },
+      { action: 'new-terminal', enabled: true },
+      { action: 'close-split', enabled: true }
+    ])
+  })
+
+  it('greys the splits once the pane runs as many shells as it may', () => {
+    const items = terminalContextMenu({ canSplit: false, canClose: true })
+    expect(items.filter((item) => item.enabled).map((item) => item.action)).toEqual(['close-split'])
+  })
+
+  it('offers nothing to close in a tab that has only one pane', () => {
+    const items = terminalContextMenu({ canSplit: true, canClose: false })
+    expect(items.find((item) => item.action === 'close-split')?.enabled).toBe(false)
   })
 })
