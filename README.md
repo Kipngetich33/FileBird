@@ -373,4 +373,10 @@ The integration, smoke and screenshot commands need Docker through Colima
 
 ## Licence
 
-MIT (see `package.json`).
+**FileBird is proprietary software.** The source is published so that anyone can
+read and audit it — a program that holds the keys to your servers should be open
+to inspection — but it is not open source, and it may not be redistributed,
+modified for redistribution, or sold. See [LICENSE](LICENSE) for the full terms.
+
+Versions released before 20 October 2026 were published under the MIT licence.
+That grant stands for copies obtained under it.

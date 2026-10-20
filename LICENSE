@@ -1,0 +1,47 @@
+FileBird — Proprietary Software Licence
+
+Copyright (c) 2026 Kipngetich Ngeno. All rights reserved.
+
+This software and its source code are the property of the copyright holder.
+They are published here so that anyone may read and audit them — a program that
+holds the keys to your servers should be open to inspection — but they are NOT
+free or open-source software, and no licence to redistribute them is granted.
+
+PERMITTED
+
+1. You may read, study and audit this source code.
+2. You may compile it for the sole purpose of evaluating it on a device you own
+   or control.
+3. Where the copyright holder distributes a built copy of FileBird to you, you
+   may install and use it on devices you own or control, for personal or
+   internal business purposes.
+
+NOT PERMITTED WITHOUT PRIOR WRITTEN PERMISSION
+
+4. Copying, publishing, distributing, sublicensing, renting, lending or selling
+   this software or any substantial portion of it, in source or binary form.
+5. Distributing modified versions, derivative works, or forks.
+6. Removing or altering this notice, the product name, or the app's branding in
+   a copy that is distributed to anyone else.
+
+OTHER TERMS
+
+7. No rights are granted to the name "FileBird", the bird mark, or any other
+   trademark or branding of the copyright holder.
+8. Contributions offered to this project are accepted only under a separate
+   written agreement with the copyright holder.
+9. Earlier versions of this software were published under the MIT licence.
+   That grant stands for copies obtained under it and cannot be withdrawn; it
+   does not apply to this version or to any version released after it.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For permission to do anything this licence does not allow, or to ask about
+commercial terms, contact the copyright holder.

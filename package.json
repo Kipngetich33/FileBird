@@ -5,7 +5,7 @@
   "desktopName": "fly.desktop",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "private": true,
   "engines": {
     "node": ">=22.12.0"
