@@ -91,8 +91,8 @@ describe('buildContextMenu', () => {
       (action) => chosen.push(action)
     )
     expect(template.map((item) => item.label ?? item.type)).toEqual([
-      'Split Horizontally',
       'Split Vertically',
+      'Split Horizontally',
       'separator',
       'Add Tab',
       'Close This Split'

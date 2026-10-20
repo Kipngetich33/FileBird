@@ -2055,7 +2055,7 @@ try {
     'terminals: right-clicking a terminal offers the splits, and acts on that pane',
     { menu: terminalMenu, beforeMenuPanes, after: await app.js(panesIn(LOCAL)), splitFromMenu },
     // The stub records each item as a label, with a separator as "—".
-    splitFromMenu && (terminalMenu ?? []).join(' | ') === 'Split Horizontally | Split Vertically | — | Add Tab | Close This Split'
+    splitFromMenu && (terminalMenu ?? []).join(' | ') === 'Split Vertically | Split Horizontally | — | Add Tab | Close This Split'
   )
 
   // Closing the extra halves leaves the first shell, still running, with the keyboard.

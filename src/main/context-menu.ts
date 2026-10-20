@@ -32,12 +32,14 @@ export function contextMenuLabel(action: ContextMenuAction, platform: NodeJS.Pla
       return 'Delete…'
     case 'refresh':
       return 'Refresh'
-    // Side by side and one above the other (user request, 2026-10-20). The
-    // action ids stay directional, which cannot be read two ways.
+    // Named after the divider, as iTerm2 does (user request, 2026-10-20):
+    // halves side by side are separated by a line running down the screen, so
+    // that is a vertical split; stacked halves by a line running across it.
+    // The action ids stay directional, which cannot be read two ways.
     case 'split-right':
-      return 'Split Horizontally'
-    case 'split-down':
       return 'Split Vertically'
+    case 'split-down':
+      return 'Split Horizontally'
     case 'close-split':
       return 'Close This Split'
     case 'new-terminal':
