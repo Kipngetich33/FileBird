@@ -22,7 +22,7 @@ describe('ConnectionStorage', () => {
   let file: string
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-connections-store-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-connections-store-'))
     file = join(dir, 'connections.json')
   })
 

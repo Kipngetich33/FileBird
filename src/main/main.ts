@@ -42,7 +42,7 @@ const dataFolder = userDataFolder({
   appData: app.getPath('appData')
 })
 if (dataFolder !== null) app.setPath('userData', dataFolder)
-// The name in the macOS app menu (About, Hide, Quit); package.json's "fly" otherwise.
+// The name in the macOS app menu (About, Hide, Quit); package.json's "bridgex" otherwise.
 app.setName(APP_NAME)
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
@@ -54,16 +54,16 @@ let readyToQuit = false
 let askingToQuit = false
 
 /**
- * The home folder Fly starts in and reads ~/.ssh/config from. Unpackaged builds
- * accept FLY_DEV_HOME so the smoke test can use a fixture folder: overriding HOME
+ * The home folder BridgeX starts in and reads ~/.ssh/config from. Unpackaged builds
+ * accept BRIDGEX_DEV_HOME so the smoke test can use a fixture folder: overriding HOME
  * instead would also hide the macOS login keychain. Packaged builds ignore it.
  */
-const appHome = !app.isPackaged && process.env['FLY_DEV_HOME'] ? process.env['FLY_DEV_HOME'] : homedir()
+const appHome = !app.isPackaged && process.env['BRIDGEX_DEV_HOME'] ? process.env['BRIDGEX_DEV_HOME'] : homedir()
 
 function systemDownloads(): string | null {
   // Unpackaged runs must never write into the real Downloads folder, so tests
-  // name their own (FLY_DEV_DOWNLOADS) and otherwise keep to their fixture home.
-  if (!app.isPackaged && process.env['FLY_DEV_HOME']) return process.env['FLY_DEV_DOWNLOADS'] ?? null
+  // name their own (BRIDGEX_DEV_DOWNLOADS) and otherwise keep to their fixture home.
+  if (!app.isPackaged && process.env['BRIDGEX_DEV_HOME']) return process.env['BRIDGEX_DEV_DOWNLOADS'] ?? null
   try {
     return app.getPath('downloads')
   } catch {
@@ -91,10 +91,10 @@ const downloadFolder = downloadDirectory({
 })
 
 /**
- * Local deletes go to the system Trash. Unpackaged builds accept FLY_DEV_TRASH_DIR
+ * Local deletes go to the system Trash. Unpackaged builds accept BRIDGEX_DEV_TRASH_DIR
  * so tests never put files in the user's real Trash; packaged builds ignore it.
  */
-const trashDirectory = !app.isPackaged ? process.env['FLY_DEV_TRASH_DIR'] : undefined
+const trashDirectory = !app.isPackaged ? process.env['BRIDGEX_DEV_TRASH_DIR'] : undefined
 const trash = trashDirectory ? devTrash(trashDirectory) : (path: string): Promise<void> => shell.trashItem(path)
 
 /** `reveal` decides when the window appears; by default as soon as it has painted. */
@@ -167,7 +167,7 @@ async function pickPrivateKey(): Promise<string | null> {
 }
 
 void app.whenReady().then(() => {
-  app.setAppUserModelId('com.titansoft.fly')
+  app.setAppUserModelId('com.titansoft.bridgex')
 
   applyContentSecurityPolicy()
   Menu.setApplicationMenu(
@@ -269,7 +269,7 @@ void app.whenReady().then(() => {
   }
   showDevDockIcon()
 
-  // The FileBird start screen shows while the main window loads out of sight.
+  // The BridgeX start screen shows while the main window loads out of sight.
   const splashMs = splashDuration({ isPackaged: app.isPackaged, override: process.env['FLY_SPLASH_MS'] })
   const splash = splashMs > 0 ? openSplash({ rendererUrl: isDev ? rendererUrl : undefined, durationMs: splashMs }) : null
   createMainWindow(splash === null ? undefined : (window) => void splash.handOff(window).then(showDevDockIcon))

@@ -36,7 +36,7 @@ describe('ConnectionService against OpenSSH', () => {
   beforeAll(async () => {
     server = await startSftpServer('service')
     await server.buildFixture()
-    dir = await mkdtemp(join(tmpdir(), 'fly-service-it-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-service-it-'))
     service = new ConnectionService({
       hostKeys: new HostKeyStore(join(dir, 'known-hosts.json')),
       createProvider: () => new Ssh2SftpProvider({ readyMs: 10_000, keepaliveIntervalMs: 1_000, keepaliveCountMax: 2 }),
@@ -63,7 +63,7 @@ describe('ConnectionService against OpenSSH', () => {
 
     // 2. Trusted: connects and lands in the home folder.
     const connected = expectStatus(await service.trustHostKeyAndConnect(prompt.token), 'connected')
-    expect(connected.connection).toMatchObject({ host: server.host, port: server.port, username: 'fly', homePath: '/config' })
+    expect(connected.connection).toMatchObject({ host: server.host, port: server.port, username: 'bridgex', homePath: '/config' })
 
     const listing = await service.list(connected.connection.id, '/config/fixture')
     expect(listing.parentPath).toBe('/config')

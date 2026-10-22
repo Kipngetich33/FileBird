@@ -1,5 +1,5 @@
-appId: com.titansoft.fly
-productName: FileBird
+appId: com.titansoft.bridgex
+productName: BridgeX
 copyright: Copyright © 2026 titansoft
 
 directories:
@@ -82,7 +82,7 @@ dmg:
     - x: 270
       y: 290
       type: file
-      path: resources/dmg/How to install FileBird.txt
+      path: resources/dmg/How to install BridgeX.txt
 
 win:
   files:

@@ -23,5 +23,5 @@ export function secretAccount(connectionId: string, kind: SecretKind): string {
  * for items the unsigned development build created.
  */
 export function keychainService(isPackaged: boolean): string {
-  return isPackaged ? 'Fly' : 'Fly (development)'
+  return isPackaged ? 'BridgeX' : 'BridgeX (development)'
 }

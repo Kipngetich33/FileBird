@@ -1,8 +1,8 @@
 {
-  "name": "fly",
-  "version": "0.3.2",
-  "description": "FileBird — a cross-platform desktop SSH and SFTP client",
-  "desktopName": "fly.desktop",
+  "name": "bridgex",
+  "version": "0.4.0",
+  "description": "BridgeX — a cross-platform desktop SSH and SFTP client",
+  "desktopName": "bridgex.desktop",
   "main": "./out/main/main.js",
   "author": "titansoftlimited",
   "license": "UNLICENSED",

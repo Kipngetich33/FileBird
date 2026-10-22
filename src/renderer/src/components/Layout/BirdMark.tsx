@@ -7,7 +7,7 @@ interface BirdMarkProps {
 }
 
 /**
- * The FileBird swallow, as a mark beside the name (user request, 2026-10-19).
+ * The BridgeX swallow, as a mark beside the name (user request, 2026-10-19).
  * The same shapes as the Dock icon and the start screen, so the three agree.
  */
 export function BirdMark({ height }: BirdMarkProps): JSX.Element {
@@ -16,7 +16,7 @@ export function BirdMark({ height }: BirdMarkProps): JSX.Element {
       viewBox="0 0 120 80"
       height={height}
       role="img"
-      aria-label="FileBird"
+      aria-label="BridgeX"
       className="block w-auto shrink-0 select-none"
       style={{ overflow: 'visible' }}
     >

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 
 const root0 = dirname(fileURLToPath(import.meta.url))
 // The one place the name is written, read without importing TypeScript.
-const APP_NAME = /APP_NAME = '([^']+)'/.exec(readFileSync(join(root0, '..', 'src', 'shared', 'constants', 'app.ts'), 'utf8'))?.[1] ?? 'FileBird'
+const APP_NAME = /APP_NAME = '([^']+)'/.exec(readFileSync(join(root0, '..', 'src', 'shared', 'constants', 'app.ts'), 'utf8'))?.[1] ?? 'BridgeX'
 const ICON_FILE = `${APP_NAME.toLowerCase()}.icns`
 const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 
@@ -47,7 +47,7 @@ export function nameDevelopmentApp() {
   if (named && iconCurrent) return 'already named'
 
   if (!iconCurrent) {
-    const folder = mkdtempSync(join(tmpdir(), 'filebird-icon-'))
+    const folder = mkdtempSync(join(tmpdir(), 'bridgex-icon-'))
     const iconset = join(folder, `${APP_NAME}.iconset`)
     mkdirSync(iconset)
     for (const size of [16, 32, 128, 256, 512]) {

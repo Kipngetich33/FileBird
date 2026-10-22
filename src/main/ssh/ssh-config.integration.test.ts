@@ -17,7 +17,7 @@ describe('SshConfigImporter with the real ssh binary', () => {
   let importer: SshConfigImporter
 
   beforeAll(async () => {
-    home = await mkdtemp(join(tmpdir(), 'fly-ssh-config-it-'))
+    home = await mkdtemp(join(tmpdir(), 'bridgex-ssh-config-it-'))
     marker = join(home, 'MATCH_EXEC_RAN')
     await mkdir(join(home, '.ssh'), { recursive: true })
     await writeFile(join(home, '.ssh', 'id_web_web.example.org'), 'not a real key, only needs to exist')

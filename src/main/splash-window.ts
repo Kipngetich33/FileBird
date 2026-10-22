@@ -18,7 +18,7 @@ export interface Splash {
 }
 
 /**
- * The FileBird start screen: a borderless, transparent window in the middle of
+ * The BridgeX start screen: a borderless, transparent window in the middle of
  * the screen, shown while the main window loads out of sight. It has no
  * preload, so its page can do nothing but draw.
  */
@@ -37,10 +37,10 @@ export function openSplash(options: { rendererUrl: string | undefined; durationM
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    // Above other apps' windows even when Fly isn't the active app yet, as it
+    // Above other apps' windows even when BridgeX isn't the active app yet, as it
     // isn't when launched from a terminal.
     alwaysOnTop: true,
-    title: 'FileBird',
+    title: 'BridgeX',
     backgroundColor: '#00000000',
     webPreferences: {
       contextIsolation: true,
@@ -57,7 +57,7 @@ export function openSplash(options: { rendererUrl: string | undefined; durationM
   // Show over whatever the person is looking at: another app's windows, and
   // any Space, including a full-screen app (a new window would otherwise open
   // on the desktop Space, out of sight, until the main window took focus).
-  // Floating over full-screen apps makes macOS treat Fly as an accessory app,
+  // Floating over full-screen apps makes macOS treat BridgeX as an accessory app,
   // with no Dock icon or menu bar, until handOff brings them back.
   window.setAlwaysOnTop(true, 'screen-saver')
   if (process.platform === 'darwin') window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })

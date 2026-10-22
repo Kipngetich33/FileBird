@@ -125,7 +125,7 @@ describe('Ssh2SftpProvider against OpenSSH', () => {
   it('reports an unresolvable host as HOST_NOT_FOUND', async () => {
     const provider = new Ssh2SftpProvider(FAST)
     // RFC 6761: .invalid never resolves.
-    const outcome = provider.connect({ host: 'fly-test.invalid', port: 22, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
+    const outcome = provider.connect({ host: 'bridgex-test.invalid', port: 22, username: 'x', auth: { type: 'password', password: 'x' }, verifyHostKey: () => true })
     expect(await codeOf(outcome)).toBe('HOST_NOT_FOUND')
   })
 

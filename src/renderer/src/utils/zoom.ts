@@ -12,7 +12,7 @@
 export const ZOOM_LEVELS = [0.75, 0.85, 1, 1.15, 1.3, 1.5, 1.75, 2] as const
 
 export const DEFAULT_ZOOM = 1
-export const ZOOM_STORAGE_KEY = 'fly.zoom.v1'
+export const ZOOM_STORAGE_KEY = 'bridgex.zoom.v1'
 
 /** The font size a terminal uses at 100%; every other level is this scaled. */
 export const TERMINAL_BASE_FONT_PX = 12

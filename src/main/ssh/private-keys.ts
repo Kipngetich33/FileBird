@@ -73,7 +73,7 @@ function firstKey(parsed: ParsedKey | ParsedKey[] | Error): ParsedKey | Error {
   return Array.isArray(parsed) ? (parsed[0] ?? new Error('Unsupported key format')) : parsed
 }
 
-/** OpenSSH refuses keys that others can read; Fly warns but doesn't block (Windows modes differ). */
+/** OpenSSH refuses keys that others can read; BridgeX warns but doesn't block (Windows modes differ). */
 function tooOpen(mode: number, platform: NodeJS.Platform): boolean {
   return platform !== 'win32' && (mode & 0o077) !== 0
 }

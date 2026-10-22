@@ -1,7 +1,7 @@
 import { posix, win32 } from 'node:path'
 
 /**
- * Paths Fly refuses to delete or rename (Milestone 8 plan D3): the filesystem
+ * Paths BridgeX refuses to delete or rename (Milestone 8 plan D3): the filesystem
  * root, the home folder, and every folder that contains the home folder.
  * Paths must already be absolute and normalised.
  */

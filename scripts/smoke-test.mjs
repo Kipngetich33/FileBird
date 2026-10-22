@@ -2,10 +2,10 @@
 // over CDP with real mouse and keyboard input, so the whole
 // preload -> IPC -> main chain is exercised for real.
 //
-// Local pane: a fixture directory, used as the app's home via FLY_DEV_HOME
+// Local pane: a fixture directory, used as the app's home via BRIDGEX_DEV_HOME
 // (honoured by unpackaged builds only).
 // Remote pane: a real OpenSSH server in a container (needs `colima start fly`),
-// saved connections, the real macOS Keychain ("Fly (development)" namespace),
+// saved connections, the real macOS Keychain ("BridgeX (development)" namespace),
 // and an ~/.ssh/config import from a fixture.
 // The app runs with a throwaway --user-data-dir, so the real app data is never
 // touched, and it is restarted once to prove secrets persist in the keychain.
@@ -23,7 +23,7 @@ const PORT = 9222
 /** Node inspector for the main process, used to click real application menu items. */
 const INSPECT_PORT = 9339
 const SHOT_DIR = process.env.SMOKE_SCREENSHOT_DIR
-const KEYCHAIN_SERVICE = 'Fly (development)'
+const KEYCHAIN_SERVICE = 'BridgeX (development)'
 const ELECTRON = './node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const sha256 = (data) => createHash('sha256').update(data).digest('hex')
@@ -52,7 +52,7 @@ let scratch
 
 // Data the smoke test must never write to.
 // The installed app's data folder, and the one unpackaged runs use without --user-data-dir.
-const realTrustStores = ['fly', 'Fly (development)'].map((folder) => join(homedir(), 'Library', 'Application Support', folder, 'known-hosts.json'))
+const realTrustStores = ['fly', 'bridgex', 'BridgeX (development)'].map((folder) => join(homedir(), 'Library', 'Application Support', folder, 'known-hosts.json'))
 const readTrustStores = () => Promise.all(realTrustStores.map((path) => readFile(path, 'utf8').catch(() => null)))
 const realTrustBefore = JSON.stringify(await readTrustStores())
 
@@ -93,7 +93,7 @@ async function launchApp() {
   const child = spawn('./node_modules/.bin/electron', [`--inspect=${INSPECT_PORT}`, '.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
-    // FLY_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
+    // BRIDGEX_DEV_HOME, not HOME: macOS finds the login keychain through HOME.
     // LAUNCH_PATH, not this shell's PATH: an app opened from the Dock is started
     // by launchd with the system path, and the terminals it opens inherit that.
     // A developer's PATH would have the app's shells running version managers
@@ -101,9 +101,9 @@ async function launchApp() {
     env: {
       ...inherited,
       PATH: LAUNCH_PATH,
-      FLY_DEV_HOME: fixture,
-      FLY_DEV_TRASH_DIR: join(scratch, 'trash'),
-      FLY_DEV_DOWNLOADS: join(scratch, 'downloads')
+      BRIDGEX_DEV_HOME: fixture,
+      BRIDGEX_DEV_TRASH_DIR: join(scratch, 'trash'),
+      BRIDGEX_DEV_DOWNLOADS: join(scratch, 'downloads')
     }
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
@@ -111,7 +111,7 @@ async function launchApp() {
   child.stdout.on('data', (d) => mainLogs.push(d.toString()))
   child.stderr.on('data', (d) => mainLogs.push(d.toString()))
 
-  // Two pages appear at launch: the FileBird start screen and the (still hidden) main window.
+  // Two pages appear at launch: the BridgeX start screen and the (still hidden) main window.
   let page
   const splash = { seen: false, wordmark: null, canvas: false }
   for (let i = 0; i < 60 && (!page || !splash.seen); i++) {
@@ -240,7 +240,7 @@ async function launchApp() {
     return true
   })()`)
 
-  // Native menus can't be driven over CDP: record each right-click menu Fly
+  // Native menus can't be driven over CDP: record each right-click menu BridgeX
   // pops up, and choose from it by label, as a person would.
   await mainEval(`(() => {
     const { Menu } = process.mainModule.require('electron')
@@ -264,7 +264,7 @@ async function launchApp() {
     mainEval,
     /**
      * Right-clicks an element (40px in from its left edge, or its centre) with a
-     * real mouse event and returns the menu Fly showed, choosing `pick` from it.
+     * real mouse event and returns the menu BridgeX showed, choosing `pick` from it.
      */
     async contextMenu(selector, pick = null, { centre = false } = {}) {
       const before = await mainEval(`globalThis.__smokeContextPick = ${JSON.stringify(pick)}; globalThis.__smokeContextMenus.length`)
@@ -460,11 +460,11 @@ const codeFrom = (call) =>
 try {
   // ---------------------------------------------------------------- fixtures ---
 
-  fixture = await mkdtemp(join(tmpdir(), 'fly-smoke-'))
-  scratch = await mkdtemp(join(tmpdir(), 'fly-smoke-scratch-'))
-  // Where a download goes when it wasn't dragged somewhere (FLY_DEV_DOWNLOADS).
+  fixture = await mkdtemp(join(tmpdir(), 'bridgex-smoke-'))
+  scratch = await mkdtemp(join(tmpdir(), 'bridgex-smoke-scratch-'))
+  // Where a download goes when it wasn't dragged somewhere (BRIDGEX_DEV_DOWNLOADS).
   await mkdir(join(scratch, 'downloads'), { recursive: true })
-  userData = await mkdtemp(join(tmpdir(), 'fly-smoke-userdata-'))
+  userData = await mkdtemp(join(tmpdir(), 'bridgex-smoke-userdata-'))
   await mkdir(join(fixture, 'alpha'))
   await writeFile(join(fixture, 'file2.txt'), 'hello')
   await writeFile(join(fixture, 'file10.txt'), '')
@@ -487,7 +487,7 @@ try {
       'Host smoke-imported',
       '  HostName 127.0.0.1',
       `  Port ${server.port}`,
-      '  User fly',
+      '  User bridgex',
       `  IdentityFile ${keyPath}`,
       'Host smoke-jumped',
       '  HostName 10.0.0.5',
@@ -499,9 +499,9 @@ try {
 
   app = await launchApp()
   record(
-    'start screen: FileBird shows its animated start screen first, floating over other apps and Spaces, then hands over to the main window after about 6 seconds, with the Dock icon and menu bar back',
+    'start screen: BridgeX shows its animated start screen first, floating over other apps and Spaces, then hands over to the main window after about 6 seconds, with the Dock icon and menu bar back',
     app.splash,
-    app.splash.seen && app.splash.wordmark === 'FileBird' && app.splash.canvas && app.splash.mainShownAfter !== null && app.splash.mainShownAfter >= 5800 &&
+    app.splash.seen && app.splash.wordmark === 'BridgeX' && app.splash.canvas && app.splash.mainShownAfter !== null && app.splash.mainShownAfter >= 5800 &&
       app.splash.floating === JSON.stringify({ onTop: true, allSpaces: true }) && app.splash.dockVisibleAfter
   )
   const rendered = await app.waitFor(`document.querySelectorAll(${q(`${LOCAL} [role="row"][data-path]`)}).length > 0`)
@@ -758,7 +758,7 @@ try {
     `JSON.stringify({ connected: ${connected}, subtitle: ${textOf(`${REMOTE} [data-testid="pane-subtitle"]`)}, title: ${textOf('header')} })`,
     (v) => {
       const d = JSON.parse(v)
-      return d.connected && d.subtitle === `fly@127.0.0.1:${server.port}` && d.title.includes('Connected to fly@127.0.0.1')
+      return d.connected && d.subtitle === `bridgex@127.0.0.1:${server.port}` && d.title.includes('Connected to bridgex@127.0.0.1')
     }
   )
 
@@ -1046,9 +1046,9 @@ try {
       sameContent: serverSha === localSha,
       inDownloads: (await readdir(downloads)).includes('from-server.bin'),
       inPaneFolder,
-      leftovers: (await readdir(downloads)).filter((name) => name.includes('fly-part'))
+      leftovers: (await readdir(downloads)).filter((name) => name.includes('bridgex-part'))
     },
-    downloaded && serverSha === localSha && !inPaneFolder && (await readdir(downloads)).every((name) => !name.includes('fly-part'))
+    downloaded && serverSha === localSha && !inPaneFolder && (await readdir(downloads)).every((name) => !name.includes('bridgex-part'))
   )
   const showButton = `${jobRow('from-server.bin')} [data-testid="panel-show"]`
   await app.waitFor(exists(showButton), 10000)
@@ -1226,7 +1226,7 @@ try {
   await app.mouseClickButton(PANEL, 'Retry failed')
   const retried = await app.waitFor(allDone(['r1.bin', 'r2.bin', 'r3.bin']), 90000)
   const retriedSizes = await server.exec("stat -c '%s' /config/fixture/r1.bin /config/fixture/r2.bin /config/fixture/r3.bin")
-  const partialsAfterRetry = (await server.exec('ls -A /config/fixture')).split('\n').filter((name) => name.includes('fly-part'))
+  const partialsAfterRetry = (await server.exec('ls -A /config/fixture')).split('\n').filter((name) => name.includes('bridgex-part'))
   record(
     'UI retry: after reconnecting, Retry failed completes every job on the new connection and removes the partial files the drop left',
     { retried, retriedSizes, partialsAfterRetry },
@@ -1249,7 +1249,7 @@ try {
   await app.waitFor(exists(DIALOG))
   await app.mouseClickButton(DIALOG, 'Disconnect')
   const cancelledByDisconnect = await app.waitFor(`${jobStatus('q1.bin')} === 'cancelled' && ${exists(profileRow('Smoke key'))}`, 10000)
-  const partialsAfterDisconnect = (await server.exec('ls -A /config/fixture')).split('\n').filter((name) => name.includes('fly-part'))
+  const partialsAfterDisconnect = (await server.exec('ls -A /config/fixture')).split('\n').filter((name) => name.includes('bridgex-part'))
   record(
     'UI queue: disconnecting with a transfer running asks first; confirming cancels it and removes its partial file',
     { asked, stillConnected, cancelledByDisconnect, partialsAfterDisconnect },
@@ -1580,7 +1580,7 @@ try {
   record(
     'UI drag: a file dropped from outside the app neither replaces the UI nor starts a transfer',
     { hrefBefore, hrefAfter: await app.js('location.href') },
-    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'FileBird' && (await app.js(jobCount)) === jobsBefore
+    (await app.js('location.href')) === hrefBefore && (await app.js(`document.title`)) === 'BridgeX' && (await app.js(jobCount)) === jobsBefore
   )
 
   // Upload chosen from a right-click menu goes through the same queue.
@@ -1764,7 +1764,7 @@ try {
   // The other pane is untouched: this is a pane's zoom, not the window's.
   await app.clickMenu('command:focus-remote')
   await app.clickMenu('command:zoom-in')
-  const remembered = JSON.parse(await app.js(`window.localStorage.getItem('fly.zoom.v1')`))
+  const remembered = JSON.parse(await app.js(`window.localStorage.getItem('bridgex.zoom.v1')`))
   record(
     'zoom: each pane keeps its own level, and both are remembered',
     { local: await app.js(zoomBadge(LOCAL)), remote: await app.js(zoomBadge(REMOTE)), remembered },
@@ -2146,7 +2146,7 @@ try {
   await app.click(NEW_FORM, 'Save')
   await app.waitFor(exists(profileRow('Smoke password')))
   await app.click(profileRow('Smoke password'), 'Connect')
-  record('UI password: a password is asked for when not saved', '', await app.waitFor(`${textOf(DIALOG)}.includes('Password for fly@127.0.0.1')`, 10000))
+  record('UI password: a password is asked for when not saved', '', await app.waitFor(`${textOf(DIALOG)}.includes('Password for bridgex@127.0.0.1')`, 10000))
   await app.type('input[name="secret"]', 'definitely-wrong')
   await app.click(DIALOG, 'Connect')
   record('UI password: a wrong password is asked for again, marked rejected', await app.js(alertIn(DIALOG)), await app.waitFor(`${alertIn(DIALOG)}.includes('not accepted')`, 15000))
@@ -2269,7 +2269,7 @@ try {
   record(
     'quit: with a transfer running, closing the window and quitting both ask first; Cancel keeps the app and the transfer',
     { questions, closeKept, quitKept },
-    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit FileBird and cancel 1 transfer?']) && closeKept && quitKept
+    questions === JSON.stringify(['Close the window and cancel 1 transfer?', 'Quit BridgeX and cancel 1 transfer?']) && closeKept && quitKept
   )
 
   await app.mainEval('globalThis.__answer = 1')

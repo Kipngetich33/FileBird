@@ -1,7 +1,12 @@
 /**
- * The product's name, wherever the app shows it. Internal identifiers keep the
- * old name on purpose: the app id (com.titansoft.fly), the data folder ("fly"),
- * the keychain namespaces ("Fly", "Fly (development)") and file and drag type
- * names, because changing them would orphan saved connections and passwords.
+ * The product's name, wherever the app shows it.
+ *
+ * Renamed from FileBird on 2026-10-23, because that name was already taken.
+ * Unlike the previous rename, this one went all the way down: the app id
+ * (com.titansoft.bridgex), the data folder ("bridgex"), the keychain namespaces
+ * ("BridgeX", "BridgeX (development)"), the ".bridgex-part-" temporary names and
+ * the drag types all carry the new name, so nothing in the product still refers
+ * to the old one. The cost is that data written by a FileBird build is not read
+ * by this one; there was one install, and it was migrated by hand.
  */
-export const APP_NAME = 'FileBird'
+export const APP_NAME = 'BridgeX'

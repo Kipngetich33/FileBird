@@ -29,7 +29,7 @@ describe('FileOperationsService against OpenSSH', () => {
 
   beforeAll(async () => {
     server = await startSftpServer('file-ops')
-    dir = await mkdtemp(join(tmpdir(), 'fly-file-ops-it-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-file-ops-it-'))
     connections = new ConnectionService({
       hostKeys: new HostKeyStore(join(dir, 'known-hosts.json')),
       createProvider: () => new Ssh2SftpProvider(),

@@ -40,7 +40,7 @@ describe('HostKeyStore', () => {
   let file: string
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-host-keys-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-host-keys-'))
     file = join(dir, 'nested', 'known-hosts.json')
   })
 

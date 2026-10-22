@@ -1,4 +1,4 @@
-// A local OpenSSH server for trying Fly by hand in `npm run dev`.
+// A local OpenSSH server for trying BridgeX by hand in `npm run dev`.
 //
 //   npm run test-server -- up       start one (or show the running one)
 //   npm run test-server -- status   show connection details
@@ -11,7 +11,7 @@ import { promisify } from 'node:util'
 import { assertDockerAvailable, startSftpServer } from '../test/support/sftp-container.ts'
 
 const run = promisify(execFile)
-const PREFIX = 'fly-sftp-manual-'
+const PREFIX = 'bridgex-sftp-manual-'
 
 async function docker(args) {
   const { stdout } = await run('docker', args, { timeout: 60_000 })
@@ -25,7 +25,7 @@ async function findRunning() {
   const port = Number((await docker(['port', name, '2222/tcp'])).split('\n')[0].split(':').pop())
   const env = JSON.parse(await docker(['inspect', '--format', '{{json .Config.Env}}', name]))
   const password = env.find((entry) => entry.startsWith('USER_PASSWORD='))?.slice('USER_PASSWORD='.length)
-  return { name, host: '127.0.0.1', port, username: 'fly', password }
+  return { name, host: '127.0.0.1', port, username: 'bridgex', password }
 }
 
 function describe(server) {

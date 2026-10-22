@@ -15,7 +15,7 @@ const log = createLogger('ssh-config')
  * Reading ~/.ssh/config for a one-way import (Milestone 3, decision D11).
  *
  * Host settings are resolved by OpenSSH itself (`ssh -G`), which applies
- * Include, Match and defaults exactly as `ssh` would. Fly only lists the host
+ * Include, Match and defaults exactly as `ssh` would. BridgeX only lists the host
  * aliases (ssh -G can't) and looks for `Match exec`, because ssh -G runs those
  * commands and the user must agree to that first.
  */
@@ -235,7 +235,7 @@ export class SshConfigImporter {
 
     // Every host prints OpenSSH's default key names when none is configured;
     // an empty config shows exactly which names those are.
-    const defaults = parseSshG(await this.runSsh(['-F', devNull, '-G', 'fly-import-defaults'])).identityFiles
+    const defaults = parseSshG(await this.runSsh(['-F', devNull, '-G', 'bridgex-import-defaults'])).identityFiles
 
     const resolved = await mapLimit(scan.aliases, 4, async (alias) => {
       try {

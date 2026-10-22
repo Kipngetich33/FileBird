@@ -12,7 +12,7 @@ const isRoot = process.getuid?.() === 0
 let root: string
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), 'fly-local-files-'))
+  root = await mkdtemp(join(tmpdir(), 'bridgex-local-files-'))
   await mkdir(join(root, 'alpha'))
   await writeFile(join(root, 'file2.txt'), 'hello')
   await writeFile(join(root, '.hidden'), '')

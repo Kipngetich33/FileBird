@@ -41,7 +41,7 @@ export function assertAbsolutePath(value: unknown, field: string): string {
 }
 
 /**
- * Remote paths are always POSIX, whatever OS Fly runs on. Accepts only absolute
+ * Remote paths are always POSIX, whatever OS BridgeX runs on. Accepts only absolute
  * paths and returns them normalised, without a trailing slash.
  */
 export function assertRemotePath(value: unknown, field: string): string {

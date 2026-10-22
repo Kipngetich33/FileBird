@@ -4,15 +4,15 @@ import { SPLASH_DURATION_MS, downloadDirectory, splashDuration, splashWait, stop
 describe('userDataFolder', () => {
   it('separates unpackaged runs from the installed app, unless a folder was given', () => {
     expect(userDataFolder({ isPackaged: false, hasUserDataSwitch: false, appData: '/Users/me/Library/Application Support' })).toBe(
-      '/Users/me/Library/Application Support/Fly (development)'
+      '/Users/me/Library/Application Support/BridgeX (development)'
     )
     expect(userDataFolder({ isPackaged: false, hasUserDataSwitch: true, appData: '/x' })).toBeNull()
     expect(userDataFolder({ isPackaged: true, hasUserDataSwitch: true, appData: '/x' })).toBeNull()
   })
 
-  it('keeps the installed app in the folder it has always used, whatever the app is called', () => {
+  it('pins the installed app to one folder, so renaming the app cannot move it again', () => {
     expect(userDataFolder({ isPackaged: true, hasUserDataSwitch: false, appData: '/Users/me/Library/Application Support' })).toBe(
-      '/Users/me/Library/Application Support/fly'
+      '/Users/me/Library/Application Support/bridgex'
     )
   })
 })
@@ -25,7 +25,7 @@ describe('stopTransfersQuestion', () => {
 
   it('asks before quitting, with Cancel as the default', () => {
     expect(stopTransfersQuestion(3, 'quit')).toMatchObject({
-      message: 'Quit FileBird and cancel 3 transfers?',
+      message: 'Quit BridgeX and cancel 3 transfers?',
       buttons: ['Cancel', 'Quit'],
       defaultId: 0,
       cancelId: 0

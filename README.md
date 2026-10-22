@@ -1,12 +1,12 @@
-# FileBird
+# BridgeX
 
 **An SSH and SFTP client in one window.** Your Mac on the left, your server on the
 right. Drag files between them, and run commands on the same connection without
 opening another app.
 
-![FileBird connected to a server, with files on both sides](screenshots/06-connected.png)
+![BridgeX connected to a server, with files on both sides](screenshots/06-connected.png)
 
-FileBird is a desktop app for anyone who keeps files on a server: developers
+BridgeX is a desktop app for anyone who keeps files on a server: developers
 deploying a site, teams moving backups, anyone who has ever juggled an FTP client
 in one window and a terminal in another. It does both jobs at once, over the
 single SSH connection you have already made.
@@ -29,14 +29,14 @@ single SSH connection you have already made.
 
 ### macOS
 
-FileBird needs macOS 13 (Ventura) or later.
+BridgeX needs macOS 13 (Ventura) or later.
 
-1. Open `FileBird-<version>-mac-x64.dmg` (Intel) or `-arm64.dmg` (Apple Silicon)
-   and drag **FileBird** onto **Applications**.
-2. Open FileBird. The first time, macOS says it cannot verify the developer:
+1. Open `BridgeX-<version>-mac-x64.dmg` (Intel) or `-arm64.dmg` (Apple Silicon)
+   and drag **BridgeX** onto **Applications**.
+2. Open BridgeX. The first time, macOS says it cannot verify the developer:
    click **Done**.
 3. Go to **System Settings → Privacy & Security**, scroll to **Security**, and
-   click **Open Anyway** next to FileBird. You only do this once.
+   click **Open Anyway** next to BridgeX. You only do this once.
 
 That warning appears because these builds are not yet signed with a paid Apple
 developer certificate. Nothing is wrong with the app; macOS simply cannot tell
@@ -44,15 +44,15 @@ who built it.
 
 ### Windows
 
-Run `FileBird-<version>-win-x64-setup.exe`. SmartScreen warns about an
+Run `BridgeX-<version>-win-x64-setup.exe`. SmartScreen warns about an
 unrecognised app: choose **More info → Run anyway**. Passwords are stored in
 Windows Credential Manager.
 
 ### Linux
 
 ```bash
-chmod +x FileBird-<version>-linux-x86_64.AppImage
-./FileBird-<version>-linux-x86_64.AppImage
+chmod +x BridgeX-<version>-linux-x86_64.AppImage
+./BridgeX-<version>-linux-x86_64.AppImage
 ```
 
 Saving passwords needs a Secret Service provider (GNOME Keyring or KWallet), and
@@ -65,9 +65,9 @@ AppImages need FUSE (`libfuse2` on Ubuntu 22.04 and newer).
 
 ## A guided tour
 
-### 1. Opening FileBird
+### 1. Opening BridgeX
 
-![The FileBird start screen](screenshots/01-start-screen.png)
+![The BridgeX start screen](screenshots/01-start-screen.png)
 
 A short animation while the app starts, then the main window.
 
@@ -89,7 +89,7 @@ rather than typing them again.
 ![The new connection form](screenshots/03-new-connection.png)
 
 A name, a host, a port and a username, then either a **password** or a **private
-key**. Choosing a key opens a file picker; FileBird reads the key only when you
+key**. Choosing a key opens a file picker; BridgeX reads the key only when you
 connect, and tells you what it found — the type, its fingerprint, and whether it
 needs a passphrase.
 
@@ -107,11 +107,11 @@ server has accepted it, so a typo never gets saved.
 
 ![The host key prompt showing the server's fingerprint](screenshots/05-host-key.png)
 
-The first time you reach a server, FileBird shows you its fingerprint before
+The first time you reach a server, BridgeX shows you its fingerprint before
 trusting anything, and refuses to continue until you confirm. From then on that
 key is checked on every connection.
 
-If a known server's key ever changes, FileBird stops and tells you. There is no
+If a known server's key ever changes, BridgeX stops and tells you. There is no
 "connect anyway" button, because a changed key is exactly what a machine in the
 middle of your connection would look like.
 
@@ -122,7 +122,7 @@ middle of your connection would look like.
 Local on the left, the server on the right. The pane you last clicked is the
 **active** one — it has a brighter border, and menu commands and shortcuts act on
 it. `Cmd/Ctrl+1` and `Cmd/Ctrl+2` jump between them, and the divider in the
-middle drags to give one side more room. FileBird remembers where you left it.
+middle drags to give one side more room. BridgeX remembers where you left it.
 
 ### 7. Browsing
 
@@ -158,7 +158,7 @@ folder, the way a browser would.
 
 Every transfer joins a queue at the bottom of the window: three files move at a
 time, each with its own progress and speed. You can **Cancel** one, **Retry**
-a failed one — FileBird reconnects if the server dropped — and filter by
+a failed one — BridgeX reconnects if the server dropped — and filter by
 **Active**, **Completed** or **Failed**. **Show** opens a finished file in Finder
 or File Explorer.
 
@@ -199,7 +199,7 @@ and **×** closes just that half. Splits can be split again, each one its own
 shell with its own scrollback and its own starting folder.
 
 A pane runs up to eight shells on your own machine and four on a server —
-a server allows only so many channels on one connection, and FileBird leaves room
+a server allows only so many channels on one connection, and BridgeX leaves room
 for your transfers.
 
 ### 12. Finding a file
@@ -227,10 +227,10 @@ something that already exists.
 `Delete` (or `Cmd+Backspace` on a Mac) removes what is selected, after asking.
 
 - **On your own machine**, items go to the **Trash**, where you can get them back.
-  FileBird never deletes local files permanently.
+  BridgeX never deletes local files permanently.
 - **On a server** there is no Trash, so deleting really is permanent — the
   question says so plainly, and folders are deleted with everything inside them.
-  FileBird never follows a link when deleting, so removing a shortcut never
+  BridgeX never follows a link when deleting, so removing a shortcut never
   touches what it points at.
 
 Your home folder, the drive's root and any folder containing them are refused
@@ -238,14 +238,14 @@ outright, on either side.
 
 ---
 
-## Everything FileBird does
+## Everything BridgeX does
 
 **Connecting**
 - Saved servers with password or private-key sign-in (`ed25519`, `rsa`, `ecdsa`).
 - Passwords and passphrases in the OS keychain — Keychain on macOS, Credential
   Manager on Windows, Secret Service on Linux — saved only after they work.
 - One-way import from `~/.ssh/config`, including `IdentityFile`. Hosts with
-  settings FileBird cannot honour are listed with a warning instead of failing later.
+  settings BridgeX cannot honour are listed with a warning instead of failing later.
 - Server identities trusted on first use, after you have seen the fingerprint;
   a changed key is a hard stop.
 
@@ -304,7 +304,7 @@ outright, on either side.
 
 ## Your security and privacy
 
-FileBird holds the keys to your servers, so it is built to deserve that.
+BridgeX holds the keys to your servers, so it is built to deserve that.
 
 - **Passwords and passphrases live only in your system keychain.** They never
   reach a settings file, a log, or the part of the app that draws the screen.
@@ -333,14 +333,14 @@ FileBird holds the keys to your servers, so it is built to deserve that.
   would be a copy, not a rename) — transfer it through the other pane instead.
 - Transfer history is kept in memory, so it is forgotten when the app closes.
 - No SSH agent, `ProxyJump` or hardware keys yet, and `~/.ssh/known_hosts` is not
-  read — FileBird keeps its own list of trusted servers.
+  read — BridgeX keeps its own list of trusted servers.
 - No searching inside a terminal's scrollback.
 
 ---
 
 ## For developers
 
-FileBird is Electron, React and TypeScript. Everything that touches a disk, a
+BridgeX is Electron, React and TypeScript. Everything that touches a disk, a
 network or a shell happens in the main process; the window that draws the
 interface asks for it through a small, hand-written bridge.
 
@@ -373,7 +373,7 @@ The integration, smoke and screenshot commands need Docker through Colima
 
 ## Licence
 
-**FileBird is proprietary software.** The source is published so that anyone can
+**BridgeX is proprietary software.** The source is published so that anyone can
 read and audit it — a program that holds the keys to your servers should be open
 to inspection — but it is not open source, and it may not be redistributed,
 modified for redistribution, or sold. See [LICENSE](LICENSE) for the full terms.

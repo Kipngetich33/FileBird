@@ -31,7 +31,14 @@ export async function firstFreeName(name: string, exists: (candidate: string) =>
   throw new AppError('TRANSFER_FAILED', `Couldn't find a free name for "${name}".`)
 }
 
+/** Longest temporary name we will ever write, well inside every filesystem's limit. */
+const MAX_TEMPORARY_NAME = 220
+const PART_MARKER = '.bridgex-part-'
+
 /** A hidden temporary name beside the destination, so a failed transfer never takes the real name. */
 export function temporaryName(name: string, suffix: string): string {
-  return `.${name.slice(0, 200)}.fly-part-${suffix}`
+  // The room left for the name itself, once the leading dot, the marker and the
+  // suffix have taken theirs — derived, so renaming the marker cannot overrun.
+  const room = MAX_TEMPORARY_NAME - 1 - PART_MARKER.length - suffix.length
+  return `.${name.slice(0, room)}${PART_MARKER}${suffix}`
 }

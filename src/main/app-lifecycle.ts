@@ -2,17 +2,18 @@ import { join } from 'node:path'
 import { APP_NAME } from '../shared/constants/app'
 
 /**
- * Where app data lives. The installed app has always used a folder named after
- * the npm package ("fly"), which Electron derives from the app's name; it is
- * pinned so that renaming the app keeps saved connections and trusted host keys.
+ * Where app data lives. The folder is named after the npm package ("bridgex"),
+ * which Electron would otherwise derive from the app's display name; pinning it
+ * means a later rename of the product cannot strand saved connections and
+ * trusted host keys.
  * Unpackaged runs keep their own (Milestone 10 plan D6), matching the
- * "Fly (development)" keychain namespace, so a developer's saved connections
+ * "BridgeX (development)" keychain namespace, so a developer's saved connections
  * never appear in the installed app with secrets it can't read. An explicit
  * --user-data-dir (smoke tests, dev checks) always wins: null, keep it.
  */
 export function userDataFolder(options: { isPackaged: boolean; hasUserDataSwitch: boolean; appData: string }): string | null {
   if (options.hasUserDataSwitch) return null
-  return join(options.appData, options.isPackaged ? 'fly' : 'Fly (development)')
+  return join(options.appData, options.isPackaged ? 'bridgex' : 'BridgeX (development)')
 }
 
 /**

@@ -33,7 +33,7 @@ describe('scanSshConfig', () => {
   let home: string
 
   beforeEach(async () => {
-    home = await mkdtemp(join(tmpdir(), 'fly-ssh-config-'))
+    home = await mkdtemp(join(tmpdir(), 'bridgex-ssh-config-'))
     await mkdir(join(home, '.ssh', 'conf.d'), { recursive: true })
   })
 
@@ -91,7 +91,7 @@ describe('expandIdentityPath', () => {
 })
 
 describe('parseSshG', () => {
-  it('reads the fields Fly imports, keeping every identity file', () => {
+  it('reads the fields BridgeX imports, keeping every identity file', () => {
     const output = ['user deploy', 'hostname 203.0.113.10', 'port 2200', 'identityfile ~/.ssh/id_a', 'identityfile ~/.ssh/id_b', 'proxyjump bastion'].join('\n')
     expect(parseSshG(output)).toEqual({ hostname: '203.0.113.10', user: 'deploy', port: 2200, identityFiles: ['~/.ssh/id_a', '~/.ssh/id_b'], proxyJump: 'bastion' })
     expect(parseSshG('hostname h\nproxyjump none').proxyJump).toBeNull()
@@ -106,7 +106,7 @@ describe('SshConfigImporter (with a stand-in for ssh)', () => {
   const fakeSsh = (hosts: Record<string, string>): SshRunner => async (args) => {
     calls.push(args)
     const alias = args.at(-1) ?? ''
-    if (alias === 'fly-import-defaults') return DEFAULTS.map((f) => `identityfile ${f}`).join('\n')
+    if (alias === 'bridgex-import-defaults') return DEFAULTS.map((f) => `identityfile ${f}`).join('\n')
     const output = hosts[alias]
     if (output === undefined) throw new Error(`unexpected alias ${alias}`)
     return output
@@ -122,7 +122,7 @@ describe('SshConfigImporter (with a stand-in for ssh)', () => {
     })
 
   beforeEach(async () => {
-    home = await mkdtemp(join(tmpdir(), 'fly-importer-'))
+    home = await mkdtemp(join(tmpdir(), 'bridgex-importer-'))
     await mkdir(join(home, '.ssh'), { recursive: true })
     calls = []
   })
@@ -168,6 +168,6 @@ describe('SshConfigImporter (with a stand-in for ssh)', () => {
     expect(by['jumped']).toMatchObject({ alreadyImported: true, warnings: [expect.stringContaining('jump host (bastion.example)')] })
 
     // Every alias is passed after `--`, so it can never be read as an option.
-    for (const args of calls.filter((a) => a.at(-1) !== 'fly-import-defaults')) expect(args.at(-2)).toBe('--')
+    for (const args of calls.filter((a) => a.at(-1) !== 'bridgex-import-defaults')) expect(args.at(-2)).toBe('--')
   })
 })

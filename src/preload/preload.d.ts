@@ -1,8 +1,8 @@
-import type { FlyApi } from './preload'
+import type { BridgeXApi } from './preload'
 
 declare global {
   interface Window {
-    readonly api: FlyApi
+    readonly api: BridgeXApi
   }
 }
 

@@ -175,14 +175,14 @@ describe('TransferQueue', () => {
   it('removes a temporary file a failed attempt left behind before trying again', async () => {
     await uploadFiles(1)
     const first = runFor('f1')
-    first.options.onLeftover?.('/srv/.f1.fly-part-abc')
+    first.options.onLeftover?.('/srv/.f1.bridgex-part-abc')
     first.reject(new AppError('CONNECTION_LOST', 'lost'))
     await settle()
     expect(removed).toEqual([])
 
     queue.retry(byName('f1').id)
     await settle()
-    expect(removed).toEqual(['/srv/.f1.fly-part-abc'])
+    expect(removed).toEqual(['/srv/.f1.bridgex-part-abc'])
     expect(byName('f1').status).toBe('running')
   })
 

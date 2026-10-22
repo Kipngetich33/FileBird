@@ -27,7 +27,7 @@ describe('private keys', () => {
     await set?.remove()
   })
 
-  describe('classifyParseError pins the ssh2 messages Fly relies on', () => {
+  describe('classifyParseError pins the ssh2 messages BridgeX relies on', () => {
     it.each([
       ['Encrypted private OpenSSH key detected, but no passphrase given', 'passphrase-required'],
       ['Encrypted OpenSSH private key detected, but no passphrase given', 'passphrase-required'],
@@ -44,7 +44,7 @@ describe('private keys', () => {
       const key = set.keys[name]
       await chmod(key.path, 0o600)
       const info = await inspectPrivateKey(key.path, 'darwin')
-      expect(info).toMatchObject({ encrypted: false, comment: `fly-test-${name}`, permissionsTooOpen: false })
+      expect(info).toMatchObject({ encrypted: false, comment: `bridgex-test-${name}`, permissionsTooOpen: false })
       expect(info.fingerprint).toBe(await sshKeygenFingerprint(key.path))
       expect(info.algorithm).toMatch(name === 'ecdsa' ? /^ecdsa-sha2-/ : name === 'rsa' ? /^ssh-rsa$/ : /^ssh-ed25519$/)
     })
@@ -52,7 +52,7 @@ describe('private keys', () => {
     it('describes an encrypted key from its .pub file, without the passphrase', async () => {
       const key = set.keys['ed25519-encrypted']
       const info = await inspectPrivateKey(key.path, 'darwin')
-      expect(info).toMatchObject({ encrypted: true, algorithm: 'ssh-ed25519', comment: 'fly-test-ed25519-encrypted' })
+      expect(info).toMatchObject({ encrypted: true, algorithm: 'ssh-ed25519', comment: 'bridgex-test-ed25519-encrypted' })
       expect(info.fingerprint).toBe(await sshKeygenFingerprint(key.path))
     })
 

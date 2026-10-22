@@ -6,7 +6,7 @@ import { KeyringSecretStore } from './keyring-secret-store'
 const run = promisify(execFile)
 
 // A namespace of its own, removed afterwards, so the real app's secrets are never touched.
-const SERVICE = `Fly (test ${process.pid})`
+const SERVICE = `BridgeX (test ${process.pid})`
 const ACCOUNT = 'connection/00000000-0000-4000-8000-000000000000/password'
 
 /**

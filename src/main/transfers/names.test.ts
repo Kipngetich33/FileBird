@@ -37,7 +37,7 @@ describe('keep both', () => {
 
 describe('temporaryName', () => {
   it('is hidden, marked, and bounded in length', () => {
-    expect(temporaryName('report.pdf', 'abc123')).toBe('.report.pdf.fly-part-abc123')
+    expect(temporaryName('report.pdf', 'abc123')).toBe('.report.pdf.bridgex-part-abc123')
     expect(temporaryName('x'.repeat(300), 'abc123').length).toBeLessThanOrEqual(220)
   })
 })

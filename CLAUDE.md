@@ -1,4 +1,4 @@
-# Fly — Cross-Platform Desktop SFTP Client
+# BridgeX — Cross-Platform Desktop SSH & SFTP Client
 
 Dual-pane file manager over SSH/SFTP. Electron + React + TypeScript + Vite + Tailwind.
 Targets macOS (primary), Windows, Linux.
@@ -49,7 +49,7 @@ Packaging (M10): `npm run build:mac|win|linux` → `release/` (DMGs arm64 + x64,
 NSIS x64, AppImage x64); ad-hoc signed only, fuses flipped, production CSP;
 `npm run verify:package` checks a build and runs the x64 `.app` against a test
 server. Asks before quitting/closing with active transfers.
-After M10 (user requests, 2026-09-14): the product is named **FileBird**; a 6-second
+After M10 (user requests, 2026-09-14): the product is named **BridgeX**; a 6-second
 animated start screen (`splash-window.ts`, `renderer/splash.html`) floats over other
 apps, then restores the Dock icon and menu bar; a bird Dock icon; a plain click opens
 a folder and right-click shows a native context menu; a folder being opened says so.
@@ -88,18 +88,18 @@ verification and a commit.
    — Homebrew has no Intel bottle for it. Test image is pinned:
    `linuxserver/openssh-server:10.3_p1-r1-ls236`. Tests also need the OpenSSH
    client tools (`ssh`, `ssh-keygen`, `ssh-keyscan`), present on macOS.
-6. **`FLY_DEV_HOME`** (unpackaged builds only) overrides the folder Fly starts in
+6. **`BRIDGEX_DEV_HOME`** (unpackaged builds only) overrides the folder BridgeX starts in
    and reads `~/.ssh/config` from. The smoke test uses it; **never override
    `HOME` instead** — macOS finds the login keychain through `HOME`.
-   **`FLY_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a
+   **`BRIDGEX_DEV_TRASH_DIR`** (unpackaged only) replaces the system Trash with a
    folder, so tests never put files in the user's real Trash.
-   **`FLY_DEV_DOWNLOADS`** (unpackaged only, and only alongside `FLY_DEV_HOME`)
+   **`BRIDGEX_DEV_DOWNLOADS`** (unpackaged only, and only alongside `BRIDGEX_DEV_HOME`)
    is where downloads go, so tests never write to the real Downloads folder;
-   without it an unpackaged run with `FLY_DEV_HOME` downloads into that fixture.
-   Unpackaged runs keep app data in `…/Application Support/Fly (development)`
+   without it an unpackaged run with `BRIDGEX_DEV_HOME` downloads into that fixture.
+   Unpackaged runs keep app data in `…/Application Support/BridgeX (development)`
    unless `--user-data-dir` is given; the installed app uses its own folder.
-7. **Keychain namespaces:** `Fly` (packaged), `Fly (development)` (`npm run dev`
-   and smoke), `Fly (test <pid>)` (integration). Accounts are
+7. **Keychain namespaces:** `BridgeX` (packaged), `BridgeX (development)` (`npm run dev`
+   and smoke), `BridgeX (test <pid>)` (integration). Accounts are
    `connection/<uuid>/password|passphrase`.
 
 ## Electron gotcha: `ELECTRON_RUN_AS_NODE`
@@ -144,13 +144,13 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
 
 ## Testing gotchas added in M4
 
-- **Never read a Fly secret's value from another program** (`security … -w`):
+- **Never read a BridgeX secret's value from another program** (`security … -w`):
   macOS shows a Keychain access dialog and the call hangs. Check existence by
   attributes only (`security find-generic-password -s … -a …`, no `-w`); check
-  values through Fly. To delete leftovers, run `@napi-rs/keyring` through the
+  values through BridgeX. To delete leftovers, run `@napi-rs/keyring` through the
   Electron binary (`ELECTRON_RUN_AS_NODE=1`) — the creator can delete silently.
 - **Overriding `HOME` hides the login keychain** ("A default keychain could not
-  be found"). Use `FLY_DEV_HOME`.
+  be found"). Use `BRIDGEX_DEV_HOME`.
 - **`ssh -G` executes `Match exec` commands**, and prints `IdentityFile` with
   `~`/`%h` unexpanded plus 7 default key names when none is configured.
 - **`ssh2` reports a wrong passphrase like a server rejection** — keys are parsed
@@ -200,9 +200,9 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   quit, which then resets its quitting state. Re-quit from `setTimeout`. Smoke
   now records whether the app exits within 5 s.
 - **Check for leftovers, not just results.** Upload checks that only looked for
-  final names passed while `.fly-part` files piled up after drops and
+  final names passed while `.bridgex-part` files piled up after drops and
   disconnects; the 960 px screenshot showed them. Smoke and integration now
-  assert no `fly-part` names remain.
+  assert no `bridgex-part` names remain.
 - **A dev app launched with `--inspect` absorbs the first SIGTERM** ("Debugger
   ending…"), and `pkill -f` patterns missed it once, so an orphaned app kept
   ports 9224/9340 and a later dev check silently drove the *old* app. Stop dev
@@ -231,7 +231,7 @@ env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE npm run dev
   with that data (`app.startDrag` in smoke). External file drops are
   `dispatchDragEvent` with `data.files`.
 - **During `dragover` only `dataTransfer.types` are readable**, so the drag type
-  name carries the source side (`application/x-fly-entries+local`).
+  name carries the source side (`application/x-bridgex-entries+local`).
 - **A dropped file doesn't navigate** because Electron's `navigateOnDragDrop`
   defaults to false (probed); it's now pinned, and `will-navigate` only allows
   the app's own URL (it used to allow every `file:` URL).
@@ -309,7 +309,7 @@ npm run smoke             # CDP (+ main-process inspector) end-to-end test on th
                           # SMOKE_SCREENSHOT_DIR=<dir> also saves screenshots
 npm run test-server -- up # a local OpenSSH server for trying the app by hand (also: status, down)
 npm run build:mac         # DMGs (arm64 + x64) → release/   (build:win → NSIS x64, build:linux → AppImage x64)
-npm run verify:package -- release/mac/FileBird.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
+npm run verify:package -- release/mac/BridgeX.app   # signature, fuses, natives + launch against a test server (also win-unpacked / linux-unpacked, static)
 ```
 
 ## Architecture
@@ -370,7 +370,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   handshake and only trusted after the user confirms; a changed key is a hard
   stop with no "connect anyway". Never pass a `hostVerifier` that returns `true`.
 - **Transfers never leave a partial file under the real name**: write to
-  `.<name>.fly-part-<hex>` in the destination folder, check the size, then rename
+  `.<name>.bridgex-part-<hex>` in the destination folder, check the size, then rename
   (remote: `posix-rename`). A failed or cancelled job removes its temporary file;
   one it couldn't remove (connection gone) is removed before its retry, and
   disconnect/quit wait (≤ 5 s) for cancelled jobs to clean up. Nothing existing
@@ -388,13 +388,21 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 
 ### Decisions taken — do not re-litigate
 
-- **The product is called FileBird** (user request, 2026-09-14): `APP_NAME` in
-  `src/shared/constants/app.ts` for every name shown in code, plus `productName` in
-  `electron-builder.yml`, the page `<title>`, README and the DMG's install notes.
-  **Internal identifiers keep "fly" on purpose**: app id `com.titansoft.fly`, the
-  installed app's data folder `fly` (pinned in `userDataFolder`, since `app.setName`
-  would otherwise move it), keychain namespaces `Fly` / `Fly (development)`,
-  `.fly-part-` temp names, drag types and `fly.layout.v1`.
+- **The product is called BridgeX** (user request, 2026-10-23, renamed from
+  FileBird because that name was taken; Fly before that). `APP_NAME` in
+  `src/shared/constants/app.ts` is the single source for every name shown.
+  **This rename went all the way down**, unlike the previous one: app id
+  `com.titansoft.bridgex`, data folder `bridgex` (pinned in `userDataFolder`, or
+  `app.setName` would move it again), keychain namespaces `BridgeX` /
+  `BridgeX (development)` / `BridgeX (test <pid>)`, `.bridgex-part-` temp names,
+  drag types `application/x-bridgex-entries+<side>`, `bridgex.layout.v1` /
+  `bridgex.zoom.v1`, the `BRIDGEX_DEV_*` environment variables, the Linux
+  executable and `bridgex.desktop`. Nothing in the product carries the old names.
+  **What this cost:** a FileBird install's data folder and keychain items are not
+  read by this build. There was one such install and it was migrated by hand.
+  **Exception, deliberate:** the Colima VM profile is still `colima start fly`.
+  It is a local test VM, not part of the product, and renaming it means building
+  a new VM and pulling the image again for nothing.
 
 - **electron-vite** over Electron Forge: its layout already matches the spec's
   main/preload/renderer split.
@@ -424,7 +432,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Connection Manager in M4:** passwords/passphrases are asked for at connect
   time (with "Remember"), not typed into the profile form. "Connect without
   saving" goes through `connections.connectUnsaved`; M3's `sftp.connect` is gone.
-- **`~/.ssh/config`: one-way import**, hosts listed by Fly's parser, resolved with
+- **`~/.ssh/config`: one-way import**, hosts listed by BridgeX's parser, resolved with
   `ssh -F <config> -G -- <alias>`; hosts with warnings start unticked.
 - **Deferred:** SSH agent login, trusting `~/.ssh/known_hosts`, ProxyJump,
   PKCS#8 conversion (the error gives the `ssh-keygen -p` fix), FIDO keys.
@@ -436,7 +444,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
 - **Panes stay independent without React Context** (§16 evaluated at M5): state is
   lifted to `MainPage`, menu commands reach panes via `PaneHandle` refs. Revisit at
   M7 (the transfer queue spans both panes).
-- **Divider position lives in renderer `localStorage`** (`fly.layout.v1`) until a
+- **Divider position lives in renderer `localStorage`** (`bridgex.layout.v1`) until a
   settings file exists.
 - **Transfers use `fastGet`/`fastPut`** (64 parallel 32 KB requests; 2–2.5× plain
   streams) **on a dedicated SFTP channel per transfer**; Cancel ends that channel.
@@ -522,7 +530,7 @@ test/support/   container helper shared by integration tests, smoke and test-ser
   `0` under View act on the **active pane**, never the window (no `webFrame.setZoomLevel`,
   which would scale both panes, the transfers panel and the chrome together). A fixed
   ladder (75% → 200%, `renderer/utils/zoom.ts`) keeps repeated steps exactly on it, and
-  the level is remembered per side in `localStorage` (`fly.zoom.v1`), like the divider.
+  the level is remembered per side in `localStorage` (`bridgex.zoom.v1`), like the divider.
   **The listing is scaled with CSS `zoom`** — which also narrows the pane's own container
   query, so the Type column steps aside instead of the names being squeezed — while a
   **terminal gets a bigger font instead** (`fontSize`, then `fit()`, so the shell learns

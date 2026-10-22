@@ -106,7 +106,7 @@ describe('TransferQueue against OpenSSH', () => {
     await server.exec(
       'for d in drop readonly trees merge late lost; do mkdir -p /config/$d; done && chown 1000:1000 /config/drop /config/readonly /config/trees /config/merge /config/late /config/lost && chmod 555 /config/readonly'
     )
-    dir = await mkdtemp(join(tmpdir(), 'fly-transfers-it-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-transfers-it-'))
     local = join(dir, 'local')
     await mkdir(local)
 
@@ -151,7 +151,7 @@ describe('TransferQueue against OpenSSH', () => {
     expect(job).toMatchObject({ status: 'completed', transferredBytes: 8 * MB, totalBytes: 8 * MB, destinationPath: '/config/drop/upload.bin', relativePath: 'upload.bin' })
     expect(await remoteSha('/config/drop/upload.bin')).toBe(sha(data))
     expect(await server.exec("stat -c '%a %Y' /config/drop/upload.bin")).toBe('640 1700000000')
-    expect((await remoteList('/config/drop')).filter((n) => n.includes('fly-part'))).toEqual([])
+    expect((await remoteList('/config/drop')).filter((n) => n.includes('bridgex-part'))).toEqual([])
   })
 
   it('reports throttled progress that only moves forward and ends at the total', async () => {
@@ -178,7 +178,7 @@ describe('TransferQueue against OpenSSH', () => {
     expect(job?.status).toBe('completed')
     expect(sha(await readFile(join(local, 'download.bin')))).toBe(await remoteSha('/config/drop/download.bin'))
     expect(Math.floor((await stat(join(local, 'download.bin'))).mtimeMs / 1000)).toBe(1_600_000_000)
-    expect((await readdir(local)).filter((n) => n.includes('fly-part'))).toEqual([])
+    expect((await readdir(local)).filter((n) => n.includes('bridgex-part'))).toEqual([])
   })
 
   it('handles an empty file and a name with spaces and Unicode, both ways', async () => {
@@ -435,7 +435,7 @@ describe('TransferQueue against OpenSSH', () => {
       expect(retried.map((job) => [job.status, job.attempt, job.connectionId])).toEqual(Array(5).fill(['completed', 2, connectionId]))
       for (const [name, hash] of hashes) expect(await remoteSha(`/config/lost/${name}`)).toBe(hash)
       // The partial files the dropped connection couldn't remove were removed on retry.
-      expect((await remoteList('/config/lost')).filter((name) => name.includes('fly-part'))).toEqual([])
+      expect((await remoteList('/config/lost')).filter((name) => name.includes('bridgex-part'))).toEqual([])
     })
   })
 })

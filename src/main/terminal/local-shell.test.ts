@@ -3,15 +3,15 @@ import { defaultShell, shellEnvironment, TERM_NAME } from './local-shell'
 import { quoteForShell } from './shell'
 
 describe('shellEnvironment', () => {
-  it('keeps the user’s environment but never Fly’s own switches', () => {
+  it('keeps the user’s environment but never BridgeX’s own switches', () => {
     const env = shellEnvironment({
       PATH: '/usr/bin',
       HOME: '/home/me',
       ELECTRON_RUN_AS_NODE: '1',
       ELECTRON_NO_ATTACH_CONSOLE: '1',
       NODE_OPTIONS: '--require=/x.js',
-      FLY_DEV_HOME: '/tmp/fixture',
-      FLY_DEV_TRASH_DIR: '/tmp/trash',
+      BRIDGEX_DEV_HOME: '/tmp/fixture',
+      BRIDGEX_DEV_TRASH_DIR: '/tmp/trash',
       EMPTY: undefined
     })
     expect(env).toEqual({ PATH: '/usr/bin', HOME: '/home/me', TERM: TERM_NAME })

@@ -71,7 +71,7 @@ describe('ConnectionProfilesService', () => {
   let service: ConnectionProfilesService
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-profiles-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-profiles-'))
     storage = new ConnectionStorage(join(dir, 'connections.json'))
     secrets = new MemorySecrets()
     connector = new FakeConnector()

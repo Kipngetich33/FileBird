@@ -12,9 +12,9 @@ export const TERM_NAME = 'xterm-256color'
  *
  * Electron's own switches would make a child Electron behave strangely (the
  * ELECTRON_RUN_AS_NODE trap), and the app's development overrides describe
- * Fly's test setup, not the user's computer.
+ * BridgeX's test setup, not the user's computer.
  */
-const DROPPED_ENV = /^(ELECTRON_|NODE_OPTIONS$|FLY_DEV_)/
+const DROPPED_ENV = /^(ELECTRON_|NODE_OPTIONS$|BRIDGEX_DEV_)/
 
 export function shellEnvironment(base: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}

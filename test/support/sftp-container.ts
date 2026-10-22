@@ -57,7 +57,7 @@ export interface SftpTestServer {
   readonly name: string
   readonly host: '127.0.0.1'
   readonly port: number
-  readonly username: 'fly'
+  readonly username: 'bridgex'
   readonly password: string
   /** The user's home directory, which is also realpath('.') after login. */
   readonly home: '/config'
@@ -94,7 +94,7 @@ export interface SftpServerOptions {
 export async function startSftpServer(label: string, options: SftpServerOptions = {}): Promise<SftpTestServer> {
   await assertDockerAvailable()
 
-  const name = `fly-sftp-${label}-${process.pid}-${Date.now()}`
+  const name = `bridgex-sftp-${label}-${process.pid}-${Date.now()}`
   const password = `pw-${randomBytes(12).toString('hex')}`
   const passwordAccess = options.passwordAccess ?? true
 
@@ -106,7 +106,7 @@ export async function startSftpServer(label: string, options: SftpServerOptions 
         ? []
         : ['--mount', `type=tmpfs,destination=/tiny,tmpfs-size=${options.tinyDiskBytes},tmpfs-mode=1777`]),
       '-e', 'PUID=1000', '-e', 'PGID=1000', '-e', 'TZ=Etc/UTC',
-      '-e', 'USER_NAME=fly', '-e', `USER_PASSWORD=${password}`, '-e', `PASSWORD_ACCESS=${passwordAccess}`,
+      '-e', 'USER_NAME=bridgex', '-e', `USER_PASSWORD=${password}`, '-e', `PASSWORD_ACCESS=${passwordAccess}`,
       SFTP_IMAGE
     ],
     180_000
@@ -141,7 +141,7 @@ export async function startSftpServer(label: string, options: SftpServerOptions 
     name,
     host: '127.0.0.1',
     port,
-    username: 'fly',
+    username: 'bridgex',
     password,
     home: '/config',
     exec,

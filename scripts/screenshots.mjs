@@ -28,14 +28,14 @@ const q = JSON.stringify
  * It is removed again at the end.
  */
 async function makeHome() {
-  const home = join(homedir(), 'FileBird Demo')
+  const home = join(homedir(), 'BridgeX Demo')
   await rm(home, { recursive: true, force: true })
   await mkdir(home, { recursive: true })
   const tree = {
     'Documents/Invoices': ['March 2026.pdf', 'April 2026.pdf'],
     'Documents/Reports': ['Quarterly review.pdf', 'Site survey.docx'],
     Photos: ['beach.jpg', 'city at night.jpg', 'portrait.jpg'],
-    'Projects/filebird': ['README.md', 'package.json'],
+    'Projects/bridgex': ['README.md', 'package.json'],
     'Projects/website': ['index.html', 'styles.css', 'deploy.sh']
   }
   for (const [folder, files] of Object.entries(tree)) {
@@ -67,13 +67,13 @@ await server.exec(
 )
 
 const home = await makeHome()
-const userData = await mkdtemp(join(tmpdir(), 'filebird-shots-data-'))
+const userData = await mkdtemp(join(tmpdir(), 'bridgex-shots-data-'))
 await rm(SHOTS, { recursive: true, force: true })
 await mkdir(SHOTS, { recursive: true })
 
 const { ELECTRON_RUN_AS_NODE, ELECTRON_NO_ATTACH_CONSOLE, ...inherited } = process.env
 const child = spawn(join(ROOT, 'node_modules/.bin/electron'), [`--inspect=${INSPECT}`, ROOT, `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`], {
-  env: { ...inherited, FLY_DEV_HOME: home, FLY_DEV_DOWNLOADS: join(home, 'Downloads') },
+  env: { ...inherited, BRIDGEX_DEV_HOME: home, BRIDGEX_DEV_DOWNLOADS: join(home, 'Downloads') },
   stdio: 'ignore'
 })
 
@@ -295,7 +295,7 @@ await clickSelector(`${LOCAL} [data-testid="search-close"]`)
 
 // Back to the home folder, where the demo files are.
 await js(`[...document.querySelectorAll(${q(`${LOCAL} button`)})].find((b) => b.getAttribute('aria-label') === 'Parent folder')?.click()`)
-await waitFor(`document.querySelector(${q(`${LOCAL} [data-testid="pane-path"]`)}).textContent.endsWith('FileBird Demo')`)
+await waitFor(`document.querySelector(${q(`${LOCAL} [data-testid="pane-path"]`)}).textContent.endsWith('BridgeX Demo')`)
 
 // Making a folder, and the question asked before anything is deleted.
 await clickMenu('command:focus-local')

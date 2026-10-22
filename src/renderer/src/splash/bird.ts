@@ -1,5 +1,5 @@
 /**
- * The FileBird bird — a swallow, facing right, in a 120 × 80 box. Drawn by the
+ * The BridgeX bird — a swallow, facing right, in a 120 × 80 box. Drawn by the
  * start screen (as the logo and as the bird that flies along the stream);
  * resources/icon.svg uses the same shapes.
  */

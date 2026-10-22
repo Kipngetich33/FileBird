@@ -109,7 +109,7 @@ describe('ConnectionService', () => {
   let service: ConnectionService
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-connections-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-connections-'))
     hostKeys = new HostKeyStore(join(dir, 'known-hosts.json'))
     server = { key: KEY_A }
     providers = []

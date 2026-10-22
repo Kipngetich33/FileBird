@@ -54,7 +54,7 @@ describe('private key login against a key-only OpenSSH server', () => {
     for (const name of ['ed25519', 'rsa', 'ecdsa', 'ed25519-encrypted', 'rsa-pem-encrypted'] as const) {
       await server.authorizeKey(keys.keys[name].publicKey)
     }
-    dir = await mkdtemp(join(tmpdir(), 'fly-key-login-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-key-login-'))
     service = new ConnectionService({
       hostKeys: new HostKeyStore(join(dir, 'known-hosts.json')),
       createProvider: () => new Ssh2SftpProvider({ readyMs: 10_000 }),
@@ -92,7 +92,7 @@ describe('private key login against a key-only OpenSSH server', () => {
 
   it('refuses a password on a key-only server', async () => {
     const result = await failure(
-      connect({ host: server.host, port: server.port, username: 'fly', auth: { type: 'password', password: server.password } })
+      connect({ host: server.host, port: server.port, username: 'bridgex', auth: { type: 'password', password: server.password } })
     )
     expect(result.code).toBe('AUTH_FAILED')
   })

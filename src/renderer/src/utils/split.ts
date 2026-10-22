@@ -6,7 +6,7 @@
 export const DEFAULT_SPLIT = 50
 /** Neither pane may be narrower than this. */
 export const MIN_PANE_PX = 320
-export const LAYOUT_STORAGE_KEY = 'fly.layout.v1'
+export const LAYOUT_STORAGE_KEY = 'bridgex.layout.v1'
 
 export interface SplitBounds {
   min: number

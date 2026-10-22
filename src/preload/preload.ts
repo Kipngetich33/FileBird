@@ -149,6 +149,6 @@ const api = {
   }
 } as const
 
-export type FlyApi = typeof api
+export type BridgeXApi = typeof api
 
 contextBridge.exposeInMainWorld('api', api)

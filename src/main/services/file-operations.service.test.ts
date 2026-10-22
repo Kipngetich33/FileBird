@@ -26,7 +26,7 @@ describe('FileOperationsService (local)', () => {
   let service: FileOperationsService
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-file-ops-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-file-ops-'))
     home = join(dir, 'home')
     await mkdir(join(home, 'docs'), { recursive: true })
     trashed = []
@@ -143,7 +143,7 @@ describe('FileOperationsService (move, local)', () => {
   let service: FileOperationsService
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'fly-move-'))
+    dir = await mkdtemp(join(tmpdir(), 'bridgex-move-'))
     home = join(dir, 'home')
     await mkdir(join(home, 'photos'), { recursive: true })
     await writeFile(join(home, 'note.txt'), 'hello')

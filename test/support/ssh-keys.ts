@@ -40,13 +40,13 @@ export interface TestKeySet {
 }
 
 export async function generateTestKeys(): Promise<TestKeySet> {
-  const dir = await mkdtemp(join(tmpdir(), 'fly-test-keys-'))
+  const dir = await mkdtemp(join(tmpdir(), 'bridgex-test-keys-'))
   const keys = {} as Record<TestKeyName, TestKey>
 
   for (const [name, spec] of Object.entries(SPECS) as Array<[TestKeyName, (typeof SPECS)[TestKeyName]]>) {
     const path = join(dir, name)
     const passphrase = spec.encrypted ? TEST_PASSPHRASE : undefined
-    await run('ssh-keygen', ['-q', ...spec.args, '-N', passphrase ?? '', '-C', `fly-test-${name}`, '-f', path])
+    await run('ssh-keygen', ['-q', ...spec.args, '-N', passphrase ?? '', '-C', `bridgex-test-${name}`, '-f', path])
     keys[name] = { name, path, publicKey: (await readFile(`${path}.pub`, 'utf8')).trim(), passphrase }
   }
 

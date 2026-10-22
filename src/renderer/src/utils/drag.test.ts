@@ -25,11 +25,11 @@ describe('drag payload', () => {
     expect(dragSourceOf([dragType('remote')])).toBe('remote')
   })
 
-  it('refuses drags that are not exactly one Fly drag', () => {
+  it('refuses drags that are not exactly one BridgeX drag', () => {
     expect(dragSourceOf(['Files'])).toBeNull()
     expect(dragSourceOf(['text/plain', 'text/uri-list'])).toBeNull()
     expect(dragSourceOf([dragType('local'), dragType('remote')])).toBeNull()
-    expect(dragSourceOf(['application/x-fly-entries+elsewhere'])).toBeNull()
+    expect(dragSourceOf(['application/x-bridgex-entries+elsewhere'])).toBeNull()
   })
 
   it.each([

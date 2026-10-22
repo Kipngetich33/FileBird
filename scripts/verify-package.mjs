@@ -8,7 +8,7 @@
 // Windows / Linux (the unpacked folder electron-builder leaves in release/):
 // static checks only — fuses, the keychain binary, executable format.
 //
-//   npm run verify:package -- release/mac/FileBird.app        # default on an Intel Mac
+//   npm run verify:package -- release/mac/BridgeX.app        # default on an Intel Mac
 //   npm run verify:package -- release/win-unpacked
 //   npm run verify:package -- release/linux-unpacked
 import { execFile, spawn } from 'node:child_process'
@@ -28,9 +28,9 @@ const q = (value) => JSON.stringify(value)
 const DEBUG_PORT = 9261
 const INSPECT_PORT = 9263
 
-const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'FileBird.app')
-const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'FileBird.exe')) ? 'win32' : 'linux'
-const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'FileBird') : join(appPath, platform === 'win32' ? 'FileBird.exe' : 'fly')
+const appPath = process.argv[2] ?? join('release', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'BridgeX.app')
+const platform = appPath.replace(/\/$/, '').endsWith('.app') ? 'darwin' : existsSync(join(appPath, 'BridgeX.exe')) ? 'win32' : 'linux'
+const binary = platform === 'darwin' ? join(appPath, 'Contents', 'MacOS', 'BridgeX') : join(appPath, platform === 'win32' ? 'BridgeX.exe' : 'bridgex')
 const unpacked =
   platform === 'darwin'
     ? join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules')
@@ -187,7 +187,7 @@ try {
       // ------------------------------------------------------------- fuses in effect ---
 
       const { ELECTRON_RUN_AS_NODE, ELECTRON_NO_ATTACH_CONSOLE, ...inherited } = process.env
-      profile = await mkdtemp(join(tmpdir(), 'fly-package-profile-'))
+      profile = await mkdtemp(join(tmpdir(), 'bridgex-package-profile-'))
       const asNode = spawn(binary, ['-e', 'process.stdout.write("RAN-AS-NODE")', `--user-data-dir=${profile}`, `--inspect=${INSPECT_PORT}`], {
         env: { ...inherited, ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '--require=/nonexistent-preload.js' },
         stdio: ['ignore', 'pipe', 'pipe']
@@ -208,8 +208,8 @@ try {
 
       server = await startSftpServer('package')
       await server.buildFixture()
-      profile = await mkdtemp(join(tmpdir(), 'fly-package-profile-'))
-      home = await mkdtemp(join(tmpdir(), 'fly-package-home-'))
+      profile = await mkdtemp(join(tmpdir(), 'bridgex-package-profile-'))
+      home = await mkdtemp(join(tmpdir(), 'bridgex-package-home-'))
       child = spawn(binary, [`--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`], { env: inherited, stdio: ['ignore', 'pipe', 'pipe'] })
       const exited = new Promise((resolve) => child.once('exit', resolve))
 
